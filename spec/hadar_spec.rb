@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tmpdir"
+require "fileutils"
 
 RSpec.describe Hadar do
   def slide(markdown)
@@ -98,6 +99,57 @@ RSpec.describe Hadar do
 
       expect(list.slot(:body).text).to eq("• first\n• second")
       expect(code.slot(:code).text).to eq("puts :ok\n")
+    end
+
+    it "replaces an image destination without changing its caption, title, or surrounding Markdown" do
+      original = "<!-- layout: full-bleed-image -->\n\n![Quarterly *revenue*](media/old.png \"Chart source\")\n\n# Keep this heading\n"
+      original = original.gsub("\n", "\r\n")
+      expected = original.sub("media/old.png", "../assets/new%20chart.jpg")
+      deck = described_class.parse(original)
+      slot = deck.slide(0).slot(:image)
+
+      expect(slot.image_path).to eq("media/old.png")
+      updated = slot.replace_image("../assets/new chart.jpg")
+
+      expect(deck.document.source).to eq(expected)
+      expect(updated.image_path).to eq("../assets/new chart.jpg")
+      expect(updated.markdown).to include("![Quarterly *revenue*](../assets/new%20chart.jpg \"Chart source\")")
+      expect { slot.replace_image("stale.png") }.to raise_error(Hadar::Error, /stale/)
+    end
+
+    it "inserts an image into an empty image slot using a path relative to the deck" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "slides.md")
+        image_path = File.join(directory, "media", "sales chart.png")
+        FileUtils.mkdir_p(File.dirname(image_path))
+        File.binwrite(image_path, "image fixture")
+        original = "<!-- layout: image+text -->\r\n# Sales\r\n\r\nQuarterly growth.\r\n"
+        File.binwrite(path, original)
+        deck = described_class.open(path)
+        slot = deck.slide(0).slot(:image)
+
+        expect(slot).to be_empty
+        updated = slot.insert_image(image_path, alt: "Sales chart")
+        expected = original + "\r\n![Sales chart](media/sales%20chart.png)"
+
+        expect(deck.document.source).to eq(expected)
+        expect(updated.image_path).to eq("media/sales chart.png")
+        expect(updated.nodes.one?).to be(true)
+        expect(deck.save).to equal(deck)
+        expect(File.binread(path)).to eq(expected.b)
+      end
+    end
+
+    it "rejects image insertion into non-image layouts and unsaved decks cannot relativize absolute paths" do
+      deck = described_class.parse("# Title\n\nBody.\n")
+      slot = deck.slide(0).slot(:image)
+
+      expect { slot.insert_image("media/chart.png") }
+        .to raise_error(Hadar::Error, /image layout slot/)
+
+      image_deck = described_class.parse("<!-- layout: full-bleed-image -->\n")
+      expect { image_deck.slide(0).slot(:image).insert_image("/tmp/chart.png") }
+        .to raise_error(Hadar::Error, /opened deck/)
     end
 
     it "replaces a slot through Beid and atomically saves only the selected source range" do

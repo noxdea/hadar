@@ -10,8 +10,11 @@ This initial foundation provides deck/slide/slot parsing, three JSONC themes,
 layout selection, a text-only preview tree, and virtualized thumbnail rows built
 with Zaniah's existing `Describe` and `UniformList` APIs. Beid-backed
 `<!-- notes: ... -->` comments provide speaker notes on each slide and are
-excluded from the visible preview. It does not yet provide a windowed editor,
-image rendering, file watching, presentation mode, or export.
+excluded from the visible preview. Image slots can insert and replace
+source-backed Markdown references; absolute asset paths are stored relative to
+the opened deck. Hadar does not copy image files, and the preview does not yet
+render them. It also does not yet provide a windowed editor, file watching,
+presentation mode, or export.
 
 ## Installation
 
@@ -106,7 +109,12 @@ existing unrelated path requires `overwrite: true`.
 `title`, `title+body`, `two-column`, `image+text`, `full-bleed-image`,
 `quote`, `code`, and `blank` are available. Explicit layout directives take
 precedence; otherwise Hadar selects a layout from the Beid AST. Image slots
-are not rendered by this initial preview foundation.
+are not rendered by this initial preview foundation. An empty image slot can
+use `insert_image(path, alt:)`; an existing single-image slot can use
+`replace_image(path)`. Relative paths are retained, while absolute paths to
+existing files are made relative to the deck's directory. Insertion and
+replacement update only the Markdown image destination or add one image node;
+the referenced assets are not copied.
 
 `SlideList` creates thumbnail rows only for the visible viewport, using
 `Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for

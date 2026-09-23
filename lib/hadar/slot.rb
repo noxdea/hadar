@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "uri"
+
 module Hadar
   class Slot
     attr_reader :name, :nodes, :document, :slide_index
@@ -22,6 +24,14 @@ module Hadar
       nodes.map { |node| plain_text(node) }.reject(&:empty?).join("\n")
     end
 
+    def image_path
+      return if nodes.empty?
+      raise Error, "image_path requires a slot containing exactly one image" unless nodes.one? && nodes.first.type == :image
+
+      destination = nodes.first.attributes.fetch(:destination)
+      destination.match?(/\Ahttps?:\/\//i) ? destination : URI::DEFAULT_PARSER.unescape(destination)
+    end
+
     def replace_text(text)
       @deck.replace_text(self, text)
     end
@@ -42,6 +52,14 @@ module Hadar
 
     def replace_rich_text(value)
       @deck.replace_rich_text(self, value)
+    end
+
+    def replace_image(path)
+      @deck.replace_image(self, path)
+    end
+
+    def insert_image(path, alt: nil)
+      @deck.insert_image(self, path, alt: alt)
     end
 
     def owned_by?(deck) = @deck.equal?(deck)

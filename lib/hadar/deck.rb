@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "tempfile"
+require "pathname"
+require "uri"
 
 module Hadar
   class Deck
@@ -74,6 +76,36 @@ module Hadar
       slide(slot.slide_index).slot(slot.name)
     end
 
+    def replace_image(slot, path)
+      validate_slot!(slot)
+      unless slot.nodes.one? && slot.nodes.first.type == :image
+        raise ArgumentError, "replace_image requires a slot containing exactly one image"
+      end
+
+      destination = image_destination(path)
+      updated_document = Beid::Editing.set_attribute(document, slot.nodes.first, :destination, destination)
+      update_image_document(slot, updated_document)
+    end
+
+    def insert_image(slot, path, alt: nil)
+      validate_slot!(slot)
+      raise ArgumentError, "insert_image requires an empty image slot" unless slot.empty?
+      raise TypeError, "alt must be a String or nil" unless alt.nil? || alt.is_a?(String)
+      raise ArgumentError, "alt must not contain newlines or NUL" if alt&.match?(/[\r\n\0]/)
+
+      slide = self.slide(slot.slide_index)
+      unless Layout.fetch(slide.layout).slots.include?(:image)
+        raise Error, "image insertion requires an image layout slot"
+      end
+      anchor = slide.nodes.last
+      raise Error, "image insertion requires a source node in the slide" unless anchor
+
+      destination = image_destination(path)
+      alt ||= File.basename(URI::DEFAULT_PARSER.unescape(destination))
+      updated_document = Beid::Editing.insert_after(document, anchor, image_markdown(destination, alt))
+      update_image_document(slot, updated_document)
+    end
+
     def save(path = source_path, overwrite: false)
       raise Error, "no save path; open a file or pass a path" unless path
       raise TypeError, "save path must be a String" unless path.is_a?(String)
@@ -94,6 +126,62 @@ module Hadar
       raise TypeError, "slot must be a Hadar::Slot" unless slot.is_a?(Slot)
       raise Error, "slot belongs to another deck" unless slot.owned_by?(self)
       raise Error, "slot is stale; retrieve it again from the current deck" unless slot.document.equal?(document)
+    end
+
+    def image_destination(path)
+      raise TypeError, "image path must be a String" unless path.is_a?(String)
+      raise ArgumentError, "image path must not be empty or contain NUL/newlines" if path.empty? || path.match?(/[\0\r\n]/)
+
+      path = relative_image_path(path) if Pathname.new(path).absolute?
+      return path if path.match?(/\Ahttps?:\/\//i)
+
+      URI::DEFAULT_PARSER.escape(path, /[^A-Za-z0-9\-._~\/]/)
+    end
+
+    def relative_image_path(path)
+      raise Error, "absolute image paths require an opened deck" unless source_path
+
+      absolute_path = Pathname.new(File.realpath(path))
+      raise Error, "image path must be a regular file" unless absolute_path.file?
+
+      absolute_path.relative_path_from(Pathname.new(File.dirname(source_path))).to_s
+    rescue Errno::ENOENT
+      raise Error, "image file does not exist"
+    rescue ArgumentError => error
+      raise Error, "image path cannot be made relative to the deck: #{error.message}"
+    end
+
+    def image_markdown(destination, alt)
+      template = Beid::Document.parse("![image](placeholder)")
+      image = first_image(template.root.children)
+      template = Beid::Editing.set_attribute(template, image, :destination, destination)
+      image = first_image(template.root.children)
+      template = Beid::Editing.replace_text(template, image, alt)
+      image = first_image(template.root.children)
+      unless image && image.attributes.fetch(:destination) == destination
+        raise Error, "image markup cannot be represented by Beid"
+      end
+
+      template.source
+    end
+
+    def first_image(nodes)
+      nodes.each do |node|
+        return node if node.type == :image
+
+        nested = first_image(node.children)
+        return nested if nested
+      end
+      nil
+    end
+
+    def update_image_document(slot, updated_document)
+      updated_slides = build_slides(updated_document).freeze
+      updated_slot = updated_slides.fetch(slot.slide_index).slot(slot.name)
+      raise Error, "image edit did not produce an image node" if updated_slot.empty?
+
+      @document, @slides = updated_document, updated_slides
+      updated_slot
     end
 
     def self.theme_from_front_matter(document, directory)
