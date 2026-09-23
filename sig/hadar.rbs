@@ -76,9 +76,21 @@ module Hadar
     def insert_image: (Slot slot, String path, ?alt: String?) -> Slot
     def resolve_image_path: (String path) -> String
     def save: (?String path, ?overwrite: bool) -> Deck
+    def external_change?: () -> bool
+    def reload_if_changed: () -> bool
+    def reload: () -> bool
+    def watch: (?latency: Numeric, ?on_reload: ^(Deck) -> untyped) -> DeckWatcher
     def length: () -> Integer
     alias size length
     def empty?: () -> bool
+  end
+
+  class DeckWatcher
+    attr_reader deck: Deck
+
+    def initialize: (Deck deck, ?latency: Numeric, ?on_reload: ^(Deck) -> untyped) -> void
+    def poll: (?timeout: Numeric) -> bool
+    def close: () -> untyped
   end
 
   class Theme

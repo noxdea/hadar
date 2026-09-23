@@ -15,6 +15,7 @@ require_relative "hadar/rich_text_writeback"
 require_relative "hadar/slide"
 require_relative "hadar/theme"
 require_relative "hadar/deck"
+require_relative "hadar/deck_watcher"
 require_relative "hadar/renderer"
 require_relative "hadar/slide_list"
 

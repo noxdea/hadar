@@ -10,7 +10,6 @@ module Hadar
 
     def self.parse(markdown, theme: nil)
       document = Beid::Document.parse(markdown)
-      theme ||= theme_from_front_matter(document, Dir.pwd)
       from_document(document, theme: theme)
     end
 
@@ -19,33 +18,77 @@ module Hadar
       raise Error, "deck path must be a regular file" unless File.file?(source_path)
 
       document = Beid::Document.parse(File.read(source_path, encoding: "UTF-8"))
-      theme ||= theme_from_front_matter(document, File.dirname(source_path))
       new(document, theme: theme, source_path: source_path)
     end
 
     def self.from_document(document, theme: nil)
       raise TypeError, "document must be a Beid::Document" unless document.is_a?(Beid::Document)
 
-      theme ||= theme_from_front_matter(document, Dir.pwd)
       new(document, theme: theme)
     end
 
     def initialize(document, theme: nil, source_path: nil)
       @document = document
-      @theme = theme || Theme.default
-      if @theme.is_a?(String)
-        @theme = %w[minimal dark warm].include?(@theme.downcase) ? Theme.builtin(@theme) : Theme.load(@theme)
-      end
-      raise TypeError, "theme must be a Hadar::Theme" unless @theme.is_a?(Theme)
       @source_path = source_path
       @saved_source = source_path && document.source.dup.freeze
-      @slides = build_slides(document).freeze
+      @theme_override = theme
+      @theme = theme_for(document)
+      @saved_signature = source_signature(source_path) if source_path
+      @slides = build_slides(document, deck_theme: @theme).freeze
     end
 
     def slide(index) = slides.fetch(index)
     def length = slides.length
     alias size length
     def empty? = slides.empty?
+
+    def external_change?
+      return false unless source_path
+
+      source_signature(source_path) != @saved_signature
+    rescue Errno::ENOENT, Errno::EACCES
+      true
+    rescue Error
+      true
+    end
+
+    def reload_if_changed
+      return false unless external_change?
+
+      reload
+    end
+
+    def reload
+      raise Error, "cannot reload a deck that was not opened from a file" unless source_path
+
+      source, read_signature = read_source_snapshot
+      if source == @saved_source.b
+        @saved_signature = read_signature
+        return false
+      end
+      if document.source.b != @saved_source.b
+        raise Error, "deck has local edits and external changes; refusing to discard either version"
+      end
+
+      source.force_encoding(Encoding::UTF_8)
+      raise Error, "external deck is not valid UTF-8; keeping the current document" unless source.valid_encoding?
+
+      updated_document = Beid::Document.parse(source)
+      updated_theme = theme_for(updated_document)
+      updated_slides = build_slides(updated_document, deck_theme: updated_theme).freeze
+      @document, @slides, @theme = updated_document, updated_slides, updated_theme
+      @saved_source = updated_document.source.dup.freeze
+      @saved_signature = read_signature
+      true
+    rescue Errno::ENOENT
+      raise Error, "deck file disappeared since it was opened"
+    rescue Errno::EACCES
+      raise Error, "deck file is not readable"
+    end
+
+    def watch(latency: 0.05, on_reload: nil)
+      DeckWatcher.new(self, latency: latency, on_reload: on_reload)
+    end
 
     def replace_text(slot, text)
       validate_slot!(slot)
@@ -209,6 +252,7 @@ module Hadar
       write_atomically(target, overwrite: overwrite, check_source: same_source && !overwrite)
       @source_path = target
       @saved_source = document.source.dup.freeze
+      @saved_signature = source_signature(target)
       self
     end
 
@@ -282,6 +326,34 @@ module Hadar
       updated_slot
     end
 
+    def read_source_snapshot
+      3.times do
+        before = source_signature(source_path)
+        source = File.binread(source_path)
+        after = source_signature(source_path)
+        return [source, after] if before == after
+      end
+      raise Error, "deck file is changing while it is being read; retry reload"
+    end
+
+    def source_signature(path)
+      stat = File.lstat(path)
+      raise Error, "deck path is not a regular file" unless stat.file? && !stat.symlink?
+
+      [stat.dev, stat.ino, stat.size, stat.mtime.to_i, stat.mtime.nsec,
+       stat.ctime.to_i, stat.ctime.nsec].freeze
+    end
+
+    def theme_for(source_document)
+      value = @theme_override || self.class.send(:theme_from_front_matter, source_document,
+        source_path ? File.dirname(source_path) : Dir.pwd)
+      value ||= Theme.default
+      value = %w[minimal dark warm].include?(value.downcase) ? Theme.builtin(value) : Theme.load(value) if value.is_a?(String)
+      raise TypeError, "theme must be a Hadar::Theme" unless value.is_a?(Theme)
+
+      value
+    end
+
     def code_body_range(node)
       source = document.source
       lines = source.byteslice(node.range).scan(/.*?(?:\r\n|\r|\n|\z)/m).reject(&:empty?)
@@ -308,7 +380,7 @@ module Hadar
     end
     private_class_method :theme_from_front_matter
 
-    def build_slides(source_document)
+    def build_slides(source_document, deck_theme: theme)
       groups = [[]]
       source_document.root.children.each do |node|
         if node.type == :thematic_break
@@ -324,7 +396,7 @@ module Hadar
           node.attributes.dig(:values, "layout") if node.type == :directive
         end.first
         Slide.new(index: index, document: source_document, nodes: nodes, layout: requested,
-          theme: theme, deck: self)
+          theme: deck_theme, deck: self)
       end
     end
 

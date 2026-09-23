@@ -380,6 +380,67 @@ RSpec.describe Hadar do
       end
     end
 
+    it "reloads external Markdown in-place through the polling watcher and keeps slide selection" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        original = "# First\n\nOpening.\n\n---\n\n# Second\n\nOriginal body.\n"
+        updated = "# First\n\nOpening.\n\n---\n\n# Revised second\n\nExternal body.\n"
+        File.write(path, original)
+        deck = described_class.open(path)
+        thumbnails = Hadar::SlideList.new(deck, selected: 1)
+        stale_slot = deck.slide(1).slot(:title)
+        callbacks = []
+        backend = Object.new
+        backend.define_singleton_method(:poll) { |timeout:| [] }
+        backend.define_singleton_method(:close) { true }
+        expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
+        watcher = deck.watch(on_reload: ->(changed_deck) { callbacks << changed_deck })
+
+        File.write(path, updated)
+
+        expect(deck.external_change?).to be(true)
+        expect(watcher.poll(timeout: 0)).to be(true)
+        expect(deck.document.source).to eq(updated)
+        expect(deck.slide(1).title).to eq("Revised second")
+        expect(thumbnails.selected_index).to eq(1)
+        expect(callbacks).to eq([deck])
+        expect(deck.external_change?).to be(false)
+        expect(watcher.poll(timeout: 0)).to be(false)
+        expect { stale_slot.replace_text("stale") }.to raise_error(Hadar::Error, /stale/)
+
+        watcher.close
+      end
+    end
+
+    it "preserves local Markdown edits and the external file when reload conflicts" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# Original\n")
+        deck = described_class.open(path)
+        deck.slide(0).slot(:title).replace_text("Local edit")
+        local_source = deck.document.source
+        File.write(path, "# External edit\n")
+
+        expect { deck.reload_if_changed }
+          .to raise_error(Hadar::Error, /local edits and external changes/)
+        expect(deck.document.source).to equal(local_source)
+        expect(File.read(path)).to eq("# External edit\n")
+      end
+    end
+
+    it "keeps the current document when an external deck is not valid UTF-8" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# Original\n")
+        deck = described_class.open(path)
+        original_document = deck.document
+        File.binwrite(path, "# Invalid \xFF\n".b)
+
+        expect { deck.reload_if_changed }.to raise_error(Hadar::Error, /not valid UTF-8/)
+        expect(deck.document).to equal(original_document)
+      end
+    end
+
     it "rejects ambiguous multi-node slots without changing the document" do
       deck = described_class.parse("# Title\n\nFirst paragraph.\n\nSecond paragraph.\n")
       original = deck.document.source

@@ -12,3 +12,4 @@
 - Expose source-backed rich-text slot editing with inline Markdown formatting and byte-preserving Beid write-back for single text-run edits.
 - Insert or replace image-slot Markdown references through Beid, storing absolute local asset paths relative to the deck.
 - Render Markdown tables and Antares-highlighted fenced code blocks; add byte-preserving table-cell and fenced-code body edits through Beid.
+- Add poll-based external Markdown reloads with conflict checks that preserve unsaved local edits.

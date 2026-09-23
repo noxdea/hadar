@@ -16,8 +16,9 @@ the opened deck. Local image slots render through Zaniah's image decoder (PNG,
 GIF, and baseline JPEG); relative references resolve from the deck's directory.
 Missing, unreadable, and unsupported images fail preview construction with a
 `Hadar::Error`. Remote URLs are not fetched. Hadar does not copy image files;
-saving continues to write only the Markdown source. It also does not yet provide
-a windowed editor, file watching, presentation mode, or export.
+saving continues to write only the Markdown source. Hadar provides a poll-based
+file watcher for hosts to reload external Markdown edits; it does not yet provide
+a windowed editor, presentation mode, or export.
 
 ## Installation
 
@@ -89,6 +90,22 @@ body = deck.slide(1).slot(:left).rich_text
 body.replace(0..."Revenue".bytesize, "Turnover") # Beid updates only that source text run
 deck.save
 ```
+
+Opened decks can detect and reload external changes directly or through the
+Zaniah platform watcher. A watcher is polled by the host's UI loop; successful
+reloads update the same deck object and invoke `on_reload`. Reload refuses to
+discard local unsaved Markdown edits, leaving both the in-memory and on-disk
+versions untouched. The host can keep its current slide selection and rebuild
+the preview after the callback:
+
+```ruby
+watcher = deck.watch(on_reload: ->(_deck) { window.request_frame })
+watcher.poll(timeout: 0)
+```
+
+`deck.reload_if_changed` performs the same safe check without a platform watcher.
+Hadar has no text editor or caret model, so preserving an editing cursor remains
+the responsibility of a future editor host.
 
 Speaker notes can be written as a one-line or multiline HTML comment. Their
 Markdown remains in the source unchanged and does not appear in slide slots or
