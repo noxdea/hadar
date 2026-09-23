@@ -24,6 +24,22 @@ module Hadar
       nodes.map { |node| plain_text(node) }.reject(&:empty?).join("\n")
     end
 
+    def text_for(node)
+      raise TypeError, "node must be a Beid::Node" unless node.is_a?(Beid::Node)
+      raise Error, "node is not part of this slot" unless nodes.include?(node)
+
+      plain_text(node)
+    end
+
+    def table_rows(table: 0)
+      node = table_nodes.fetch(valid_index!(table, "table")) do
+        raise IndexError, "table index is outside the slot"
+      end
+      node.children.filter_map do |row|
+        row.children.map { |cell| plain_text(cell) } if row.type == :table_row
+      end
+    end
+
     def image_path
       return if nodes.empty?
       raise Error, "image_path requires a slot containing exactly one image" unless nodes.one? && nodes.first.type == :image
@@ -67,9 +83,26 @@ module Hadar
       @deck.insert_image(self, path, alt: alt)
     end
 
+    def replace_table_cell(row:, column:, value:, table: 0)
+      @deck.replace_table_cell(self, row: row, column: column, value: value, table: table)
+    end
+
+    def replace_code(text, block: 0)
+      @deck.replace_code(self, text, block: block)
+    end
+
     def owned_by?(deck) = @deck.equal?(deck)
 
     private
+
+    def table_nodes = nodes.select { |node| node.type == :table }
+
+    def valid_index!(index, name)
+      raise TypeError, "#{name} index must be an Integer" unless index.is_a?(Integer)
+      raise IndexError, "#{name} index must not be negative" if index.negative?
+
+      index
+    end
 
     def plain_text(node)
       case node.type
@@ -77,7 +110,7 @@ module Hadar
       when :image then node.attributes.fetch(:label, "")
       when :break then "\n"
       when :task_checkbox then ""
-      when :code_block then code_text(node)
+      when :code_block then code_block_text(node)
       when :html_block then node.attributes.fetch(:text, "")
       when :ordered_list, :list
         node.children.each_with_index.map { |item, index| list_item_text(item, index) }.join("\n")
@@ -102,8 +135,8 @@ module Hadar
       marker + node.children.map { |child| plain_text(child) }.join
     end
 
-    def code_text(node)
-      lines = document.source.byteslice(node.range).to_s.lines
+    def code_block_text(node)
+      lines = document.source.byteslice(node.range).to_s.scan(/.*?(?:\r\n|\r|\n|\z)/m).reject(&:empty?)
       if node.attributes[:fence]
         lines.shift
         lines.pop if node.attributes[:closed]

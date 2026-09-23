@@ -40,7 +40,7 @@ module Hadar
         .map { |node| node.attributes[:name] }
       return :two_column if div_names.include?("left") || div_names.include?("right")
       return :quote if types.include?(:block_quote)
-      return :code if types.include?(:code_block)
+      return :code if types.include?(:code_block) && (types - %i[heading code_block]).empty?
 
       images = nodes.any? { |node| contains_type?(node, :image) }
       text = nodes.any? { |node| text?(node) }

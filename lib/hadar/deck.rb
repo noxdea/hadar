@@ -49,12 +49,80 @@ module Hadar
 
     def replace_text(slot, text)
       validate_slot!(slot)
+      return replace_code(slot, text) if slot.nodes.one? && slot.nodes.first.type == :code_block
       raise ArgumentError, "replace_text requires a slot containing exactly one node" unless slot.nodes.one?
 
       updated_document = Beid::Editing.replace_text(document, slot.nodes.first, text)
       updated_slides = build_slides(updated_document).freeze
       @document, @slides = updated_document, updated_slides
       slide(slot.slide_index).slot(slot.name)
+    end
+
+    def replace_table_cell(slot, row:, column:, value:, table: 0)
+      validate_slot!(slot)
+      [table, row, column].each_with_index do |index, position|
+        name = %w[table row column][position]
+        raise TypeError, "#{name} index must be an Integer" unless index.is_a?(Integer)
+        raise IndexError, "#{name} index must not be negative" if index.negative?
+      end
+      unless value.is_a?(String) && value.valid_encoding? &&
+          (value.encoding == Encoding::UTF_8 || value.ascii_only?)
+        raise TypeError, "table cell value must be valid UTF-8 text"
+      end
+      if value.match?(/[\r\n\0|\\`*_~{}\[\]<>!]/)
+        raise ArgumentError, "table cell values must be plain text without Markdown delimiters, pipes, or newlines"
+      end
+
+      tables = slot.nodes.select { |node| node.type == :table }
+      table_node = tables.fetch(table) { raise IndexError, "table index is outside the slot" }
+      rows = table_node.children.select { |node| node.type == :table_row }
+      row_node = rows.fetch(row) { raise IndexError, "row index is outside the table" }
+      cell = row_node.children.fetch(column) { raise IndexError, "column index is outside the row" }
+      expected = slot.table_rows(table: table).map(&:dup)
+      expected[row][column] = value
+      updated_document = Beid::Editing.replace(document, cell, value)
+      update_slot_document(slot, updated_document) do |updated_slot|
+        raise Error, "table cell edit changed neighboring cells or table structure" unless updated_slot.table_rows(table: table) == expected
+      end
+    end
+
+    def replace_code(slot, text, block: 0)
+      validate_slot!(slot)
+      raise TypeError, "code must be a String" unless text.is_a?(String)
+      unless text.valid_encoding? && (text.encoding == Encoding::UTF_8 || text.ascii_only?)
+        raise ArgumentError, "code must be valid UTF-8"
+      end
+      raise ArgumentError, "code must not contain NUL" if text.include?("\0")
+      raise TypeError, "block index must be an Integer" unless block.is_a?(Integer)
+      raise IndexError, "block index must not be negative" if block.negative?
+
+      code_blocks = slot.nodes.select { |node| node.type == :code_block }
+      code = code_blocks.fetch(block) { raise IndexError, "code block index is outside the slot" }
+      fence = code.attributes[:fence]
+      unless fence && code.attributes[:closed]
+        raise Error, "only closed fenced code blocks can be edited safely"
+      end
+
+      range = code_body_range(code)
+      current_body = document.source.byteslice(range)
+      replacement = text
+      if !replacement.empty? && !replacement.end_with?("\r", "\n")
+        ending = current_body[/\r\n\z|\r\z|\n\z/] || document.source[/\r\n|\r|\n/] || "\n"
+        replacement += ending
+      end
+      closer = /\A {0,3}#{Regexp.escape(fence[0])}{#{fence.length},}[ \t]*\z/
+      lines = replacement.scan(/.*?(?:\r\n|\r|\n|\z)/m).reject(&:empty?)
+      if lines.any? { |line| closer.match?(line.delete_suffix("\r\n").delete_suffix("\n").delete_suffix("\r")) }
+        raise ArgumentError, "code contains a line that would terminate its fenced block"
+      end
+
+      updated_document = Beid::Editing.edit_range(document, code, range, replacement)
+      update_slot_document(slot, updated_document) do |updated_slot|
+        updated_code = updated_slot.nodes.select { |node| node.type == :code_block }.fetch(block)
+        unless updated_code.attributes[:info] == code.attributes[:info] && updated_slot.text_for(updated_code) == replacement
+          raise Error, "code edit could not be represented without changing adjacent Markdown"
+        end
+      end
     end
 
     def replace_rich_text(slot, value)
@@ -200,12 +268,28 @@ module Hadar
     end
 
     def update_image_document(slot, updated_document)
+      update_slot_document(slot, updated_document) do |updated_slot|
+        raise Error, "image edit did not produce an image node" if updated_slot.empty?
+      end
+    end
+
+    def update_slot_document(slot, updated_document)
       updated_slides = build_slides(updated_document).freeze
       updated_slot = updated_slides.fetch(slot.slide_index).slot(slot.name)
-      raise Error, "image edit did not produce an image node" if updated_slot.empty?
+      yield updated_slot if block_given?
 
       @document, @slides = updated_document, updated_slides
       updated_slot
+    end
+
+    def code_body_range(node)
+      source = document.source
+      lines = source.byteslice(node.range).scan(/.*?(?:\r\n|\r|\n|\z)/m).reject(&:empty?)
+      opener = lines.shift
+      raise Error, "code block opener is missing" unless opener
+      lines.pop if node.attributes[:closed]
+      start = node.range.begin + opener.bytesize
+      start...(start + lines.sum(&:bytesize))
     end
 
     def self.theme_from_front_matter(document, directory)

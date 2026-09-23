@@ -176,6 +176,57 @@ RSpec.describe Hadar do
         .to raise_error(Hadar::Error, /opened deck/)
     end
 
+    it "replaces one table cell and one fenced-code body while preserving all surrounding Markdown bytes" do
+      original = <<~'MARKDOWN'.gsub("\n", "\r\n")
+        <!-- layout: title+body -->
+        # Source
+
+        | Name | Value |
+        | --- | ---: |
+        | first | **keep** |
+        | old | 3 |
+
+        <!-- notes: untouched -->
+
+        ~~~ruby
+        puts "old"
+        ~~~
+      MARKDOWN
+      expected = original.sub("| old | 3 |", "| revised cell | 3 |")
+        .sub("puts \"old\"\r\n", "puts \"new\"\r\n")
+      deck = described_class.parse(original)
+
+      body = deck.slide(0).slot(:body)
+      expect(body.table_rows).to eq([%w[Name Value], %w[first keep], %w[old 3]])
+      updated = body.replace_table_cell(row: 2, column: 0, value: "revised cell")
+      expect(updated.table_rows[2]).to eq(["revised cell", "3"])
+      deck.slide(0).slot(:body).replace_code("puts \"new\"")
+
+      expect(deck.document.source).to eq(expected)
+      expect(deck.document.source).to include("| first | **keep** |\r\n", "<!-- notes: untouched -->\r\n", "~~~ruby\r\n")
+    end
+
+    it "rejects table and code edits that cannot be isolated from neighboring Markdown" do
+      source = "<!-- layout: title+body -->\n# Table\n\n| A | B |\n| --- | --- |\n| one | two |\n\n```ruby\nputs 1\n```\n"
+      deck = described_class.parse(source)
+      body = deck.slide(0).slot(:body)
+
+      expect { body.replace_table_cell(row: 1, column: 0, value: "one | extra") }
+        .to raise_error(ArgumentError, /plain text/)
+      expect { body.replace_table_cell(row: 1, column: 0, value: "new *value*") }
+        .to raise_error(ArgumentError, /must be plain text/)
+      expect { body.replace_table_cell(row: -1, column: 0, value: "bad") }
+        .to raise_error(IndexError, /must not be negative/)
+      expect { body.replace_code("puts 1\n```\nputs 2") }
+        .to raise_error(ArgumentError, /terminate its fenced block/)
+      expect(deck.document.source).to eq(source)
+
+      unclosed = described_class.parse("<!-- layout: title+body -->\n# Code\n\n```ruby\nputs 1\n")
+      expect { unclosed.slide(0).slot(:body).replace_code("puts 2") }
+        .to raise_error(Hadar::Error, /only closed fenced code blocks/)
+      expect(unclosed.document.source).to end_with("puts 1\n")
+    end
+
     it "replaces a slot through Beid and atomically saves only the selected source range" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
@@ -429,6 +480,45 @@ RSpec.describe Hadar do
         ensure
           window.close
         end
+      end
+    end
+
+    it "renders tables and Antares-highlighted fenced code in source order" do
+      markdown = <<~MARKDOWN
+        # Example
+
+        | Name | Value |
+        | :--- | ---: |
+        | answer | 42 |
+
+        ```ruby
+        puts "ok"
+        # note
+        ```
+      MARKDOWN
+      slide = Hadar::Deck.parse(markdown).slide(0)
+      renderer = described_class.new
+      description = renderer.describe(slide)
+      tree = []
+      visit = ->(node) { tree << node; node.children.each { |child| visit.call(child) } }
+      visit.call(description)
+
+      table = tree.find { |node| node.type == :table }
+      code = tree.find { |node| node.type == :code_block }
+      tokens = tree.select { |node| node.type == :code_token }
+
+      expect(slide.layout).to eq(:title_body)
+      expect(table.props.fetch(:rows)).to eq([["Name", "Value"], ["answer", "42"]])
+      expect(table.props.fetch(:alignments)).to eq([:left, :right])
+      expect(code.props.fetch(:language)).to eq("ruby")
+      expect(tokens.map { |token| token.props.fetch(:color) }).to include(slide.theme.colors.fetch("accent"), slide.theme.colors.fetch("muted"))
+      expect(description.children.map(&:type)).to eq([:text, :table, :code_block])
+
+      window = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+      begin
+        expect { window.render(renderer.build(slide), present: false) }.not_to raise_error
+      ensure
+        window.close
       end
     end
 

@@ -27,13 +27,17 @@ module Hadar
     def empty?: () -> bool
     def markdown: () -> String
     def text: () -> String
+    def text_for: (Beid::Node node) -> String
     def image_path: () -> String?
     def resolved_image_path: () -> String?
+    def table_rows: (?table: Integer) -> Array[Array[String]]
     def replace_text: (String text) -> Slot
     def rich_text: (?editable: bool) -> Zaniah::UI::RichText
     def replace_rich_text: (Zaniah::UI::RichText value) -> Slot
     def replace_image: (String path) -> Slot
     def insert_image: (String path, ?alt: String?) -> Slot
+    def replace_table_cell: (row: Integer, column: Integer, value: String, ?table: Integer) -> Slot
+    def replace_code: (String text, ?block: Integer) -> Slot
     def owned_by?: (Deck deck) -> bool
   end
 
@@ -66,6 +70,8 @@ module Hadar
     def slide: (Integer index) -> Slide
     def replace_text: (Slot slot, String text) -> Slot
     def replace_rich_text: (Slot slot, Zaniah::UI::RichText value) -> Slot
+    def replace_table_cell: (Slot slot, row: Integer, column: Integer, value: String, ?table: Integer) -> Slot
+    def replace_code: (Slot slot, String text, ?block: Integer) -> Slot
     def replace_image: (Slot slot, String path) -> Slot
     def insert_image: (Slot slot, String path, ?alt: String?) -> Slot
     def resolve_image_path: (String path) -> String

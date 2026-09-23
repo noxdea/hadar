@@ -3,6 +3,7 @@
 require_relative "hadar/version"
 
 require "beid"
+require "antares"
 require "kochab"
 require "zaniah"
 require "zaniah/ui"

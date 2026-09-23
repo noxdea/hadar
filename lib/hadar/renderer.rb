@@ -58,6 +58,30 @@ module Hadar
             raise Error, "cannot render image #{path.inspect}: #{error.message}"
           end
         end
+        node :table, props: {rows: :array, alignments: :array, size: :number,
+          family: :string, text_color: :string, header_color: :string, border_color: :string}, children: :none do |props, _children|
+          rows = props.fetch(:rows).each_with_index.map do |row, row_index|
+            cells = row.each_with_index.map do |value, column|
+              alignment = {left: :start, center: :center, right: :end}[props.fetch(:alignments)[column]] || :start
+              color = row_index.zero? ? props.fetch(:header_color) : props.fetch(:text_color)
+              Zaniah::Text.new(value, size: props.fetch(:size), color: color,
+                font: db.send(:font, props.fetch(:family)), wrap: :word, align: alignment)
+                .flex_1.p(6).border(1).border_color(props.fetch(:border_color))
+            end
+            Zaniah::Element.new.flex_row.w_full.children(cells)
+          end
+          Zaniah::Element.new.flex_col.w_full.children(rows)
+        end
+        node :code_block, props: {language: :string} do |_props, children|
+          Zaniah::Element.new.flex_col.w_full.children(children)
+        end
+        node :code_line, props: {} do |_props, children|
+          Zaniah::Element.new.flex_row.children(children)
+        end
+        node :code_token, props: {text: :string, color: :string, size: :number}, children: :none do |props, _children|
+          Zaniah::Text.new(props.fetch(:text), size: props.fetch(:size), color: props.fetch(:color),
+            font: db.send(:font, "monospace"), wrap: :none)
+        end
       end
     end
 
@@ -80,13 +104,13 @@ module Hadar
       when :two_column
         heading = text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme)
         columns = node(:columns, {gap: gap}, [
-          stack(text_nodes(slide.slot(:left).text, theme), gap),
-          stack(text_nodes(slide.slot(:right).text, theme), gap)
+          stack(render_blocks(slide.slot(:left), theme), gap),
+          stack(render_blocks(slide.slot(:right), theme), gap)
         ])
         [heading, columns].compact
       when :image_text
         [text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme),
-          *text_nodes(slide.slot(:text).text, theme),
+          *render_blocks(slide.slot(:text), theme),
           image_node(slide.slot(:image))].compact
       when :full_bleed_image
         [image_node(slide.slot(:image))].compact
@@ -95,13 +119,89 @@ module Hadar
           *text_nodes(slide.slot(:attribution).text, theme, size: theme.font.fetch("body_size"), color: theme.colors.fetch("muted"))]
       when :code
         [text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme),
-          *text_nodes(slide.slot(:code).text, theme, family: "monospace")].compact
+          *render_blocks(slide.slot(:code), theme)].compact
       when :blank
         []
       else
         [text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme),
-          *text_nodes(slide.slot(:body).text, theme)].compact
+          *render_blocks(slide.slot(:body), theme)].compact
       end
+    end
+
+    def render_blocks(slot, theme)
+      table_index = code_index = 0
+      slot.nodes.flat_map do |source_node|
+        case source_node.type
+        when :table
+          result = table_node(slot, source_node, table_index, theme)
+          table_index += 1
+          [result]
+        when :code_block
+          result = code_node(slot, source_node, code_index, theme)
+          code_index += 1
+          [result]
+        else
+          text_nodes(slot.text_for(source_node), theme)
+        end
+      end
+    end
+
+    def table_node(slot, source_node, index, theme)
+      node(:table, {
+        rows: slot.table_rows(table: index),
+        alignments: source_node.attributes.fetch(:alignments, []),
+        size: theme.font.fetch("body_size"),
+        family: theme.font.fetch("family"),
+        text_color: theme.colors.fetch("text"),
+        header_color: theme.colors.fetch("accent"),
+        border_color: theme.colors.fetch("muted")
+      }, [], "slide-#{slot.slide_index}-table-#{index}")
+    end
+
+    def code_node(slot, source_node, index, theme)
+      source = slot.text_for(source_node)
+      language = source_node.attributes.fetch(:info, "").split.first.to_s
+      lines = source.scan(/.*?(?:\r\n|\r|\n|\z)/m).reject(&:empty?)
+      lines = [""] if lines.empty?
+      lexer = language.empty? ? nil : Rouge::Lexer.find(language)
+      rows = code_tokens(lines, lexer)
+      line_nodes = rows.each_with_index.map do |tokens, line_index|
+        line = lines.fetch(line_index)
+        body = line.sub(/\r\n\z|\r\z|\n\z/, "")
+        visible_bytes = body.bytesize
+        offset = 0
+        token_nodes = tokens.filter_map do |kind, text|
+          size = [text.bytesize, visible_bytes - offset].min
+          offset += text.bytesize
+          next if size <= 0
+
+          node(:code_token, {text: text.byteslice(0, size), color: token_color(kind, theme),
+            size: theme.font.fetch("body_size")}, [])
+        end
+        token_nodes << node(:code_token, {text: " ", color: theme.colors.fetch("text"),
+          size: theme.font.fetch("body_size")}, []) if token_nodes.empty?
+        node(:code_line, {}, token_nodes, "line-#{line_index}")
+      end
+      node(:code_block, {language: language}, line_nodes, "slide-#{slot.slide_index}-code-#{index}")
+    end
+
+    def code_tokens(lines, lexer)
+      return lines.map { |line| [[nil, line]] } unless lexer
+
+      lexer_lines = lines.map do |line|
+        line.match?(/(?:\r\n|\r|\n)\z/) ? line.sub(/\r\n\z|\r\z|\n\z/, "\n") : line
+      end
+      highlighter = Antares::Highlighter.new(lexer: lexer.new,
+        lines: ->(index) { lexer_lines.fetch(index) }, line_count: -> { lexer_lines.length })
+      lexer_lines.each_index.map { |index| highlighter.tokens_for(index) }
+    end
+
+    def token_color(kind, theme)
+      name = kind&.qualname.to_s
+      return theme.colors.fetch("muted") if name.start_with?("Comment")
+      return theme.colors.fetch("accent") if name.start_with?("Keyword", "Literal.Number", "Literal.String", "Name.Builtin")
+
+      theme.colors.fetch("text")
     end
 
     def text_nodes(text, theme, size: theme.font.fetch("body_size"), color: theme.colors.fetch("text"), family: theme.font.fetch("family"))

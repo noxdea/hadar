@@ -104,6 +104,23 @@ Call out the remaining risk.
 
 Read them with `deck.slide(0).notes`.
 
+Tables in body slots render as rows and cells. `slot.table_rows` returns plain
+cell text (including the header as row `0`), and `replace_table_cell(row:,
+column:, value:, table: 0)` updates exactly one cell through Beid. Indices are
+zero-based. Cell values containing Markdown delimiters, pipes, or newlines are
+rejected because Beid cannot currently round-trip escaped table-cell syntax
+safely.
+
+Fenced code blocks render in monospace with syntax colors from Antares/Rouge
+when the fence info names a supported language. Unknown language names remain
+plain monospace. A slide containing other content besides its title and fenced
+blocks uses the body layout so its text and tables remain visible.
+`slot.replace_code(text, block: 0)` updates only the body of a
+closed fenced block and preserves its fence, info string, and surrounding
+Markdown. An omitted final newline is restored using the existing line ending;
+unclosed and indented code blocks are display-only. A replacement containing a
+line that would close the fence is rejected.
+
 For a deck created with `Deck.parse`, pass a new path to `save`. Replacing an
 existing unrelated path requires `overwrite: true`.
 
