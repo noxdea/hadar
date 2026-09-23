@@ -36,14 +36,14 @@ RSpec.describe Hadar::Application do
     end
   end
 
-  it "keeps unsupported body syntax visible as read-only rather than offering unsafe edits" do
+  it "offers the source-preserving table editor instead of flattening table Markdown into rich text" do
     markdown = "# Table\n\n| Name | Value |\n| --- | --- |\n| first | second |\n"
     app = described_class.new(Hadar::Deck.parse(markdown), watch: false)
 
     view = app.main_view(width: 800, height: 600)
 
     expect(app.body_editor).to be_nil
-    expect(app.instance_variable_get(:@body_editor_error)).to match(/not supported by rich-text editing/)
+    expect(app.selected_slot_name).to eq(:body)
     expect(view).to respond_to(:request_layout)
   ensure
     app&.close
@@ -61,7 +61,7 @@ RSpec.describe Hadar::Application do
     window.tick
 
     expect(app.body_editor).to be_nil
-    expect(app.instance_variable_get(:@body_editor_error)).to eq("the body slot is empty")
+    expect(app.instance_variable_get(:@body_editor_error)).to eq("this slide has no editable slots")
   ensure
     app&.close
     window&.close

@@ -118,6 +118,7 @@ module Hadar
     attr_reader renderer: Renderer
     attr_reader presenter: Presenter
     attr_reader selected_index: Integer?
+    attr_reader selected_slot_name: Symbol?
     attr_reader slide_list: SlideList
     attr_reader keymap: Zaniah::Input::Keymap
     attr_reader body_editor: Zaniah::UI::RichText?
@@ -130,6 +131,13 @@ module Hadar
     def command_palette: () -> CommandPalette?
     def export_png_sequence: (String directory, ?width: Integer, ?height: Integer) -> Array[String]
     def save: (?String path, ?overwrite: bool) -> Deck
+    def selected_slot: () -> Slot?
+    def select_slot: (String | Symbol name) -> Slot
+    def select_table_cell: (table: Integer, row: Integer, column: Integer) -> Array[Integer]
+    def select_code_block: (Integer index) -> Beid::Node
+    def insert_or_replace_selected_image: (String path) -> Slot
+    def replace_selected_table_cell: (String value) -> Slot
+    def replace_selected_code: (String text) -> Slot
     def select_slide: (Integer index) -> Slide
     def next_slide: () -> Slide?
     def previous_slide: () -> Slide?

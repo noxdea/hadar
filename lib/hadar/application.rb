@@ -2,7 +2,7 @@
 
 module Hadar
   class Application
-    attr_reader :deck, :renderer, :presenter, :selected_index, :slide_list, :keymap, :body_editor
+    attr_reader :deck, :renderer, :presenter, :selected_index, :selected_slot_name, :slide_list, :keymap, :body_editor
 
     def self.default_keymap(clock: Zaniah::MONOTONIC_CLOCK)
       Zaniah::Input::Keymap.new(clock: clock)
@@ -33,6 +33,7 @@ module Hadar
       @deck, @renderer, @clock = deck, renderer, clock
       @keymap = keymap || self.class.default_keymap(clock: clock)
       @selected_index = deck.empty? ? nil : 0
+      @selected_slot_name = default_slot_name(deck.slide(@selected_index)) if @selected_index
       @presenter = Presenter.new(deck, renderer: renderer, clock: clock)
       @windows = []
       @main_window = @presenter_window = nil
@@ -45,6 +46,9 @@ module Hadar
       @body_editor = nil
       @body_editor_index = nil
       @body_editor_error = nil
+      @table_selection = @table_draft = nil
+      @code_block_index = 0
+      @code_draft = nil
       rebuild_slide_list
       @watcher = deck.source_path && watch ? deck.watch(on_reload: ->(_updated) { deck_reloaded }) : nil
     end
@@ -73,11 +77,13 @@ module Hadar
       workspace = Zaniah::Div.new.flex_row.flex_1
         .child(Zaniah::Div.new.flex_1.child(transition_view(preview, :main)))
       unless presenter.started?
-        editor, error = body_editor_for_selected_slide
+        editor, error = slot_editor_for_selected_slide
         editor_width = [[(Float(width) - sidebar_width) * 0.36, 420].min, 160].max
+        slot_title = selected_slot_name&.to_s&.capitalize || "No slots"
         editor_pane = Zaniah::Div.new.w(editor_width).h_full.p(12).gap(8)
           .style(flex_direction: :column, border: 1, border_color: deck.theme.colors.fetch("muted"))
-          .child(Zaniah::UI::Label.new("Body", size: :sm))
+        editor_pane.child(Zaniah::UI::Label.new(slot_title, size: :sm))
+        editor_pane.child(slot_selector) if selected_index && deck.slide(selected_index).slots.any?
         editor_pane.child(editor.w_full.flex_1) if editor
         editor_pane.child(Zaniah::UI::Label.new("Editing unavailable: #{error}", tone: :muted)) if error
         workspace.child(editor_pane)
@@ -97,6 +103,67 @@ module Hadar
 
     def save(path = nil, overwrite: false)
       path ? deck.save(path, overwrite: overwrite) : deck.save(overwrite: overwrite)
+    end
+
+    def selected_slot
+      return unless selected_index && selected_slot_name
+
+      deck.slide(selected_index).slot(selected_slot_name)
+    end
+
+    def select_slot(name)
+      raise Error, "there is no selected slide" unless selected_index
+      raise TypeError, "slot name must be a String or Symbol" unless name.is_a?(String) || name.is_a?(Symbol)
+
+      slot_name = name.to_sym
+      slot = deck.slide(selected_index).slots.fetch(slot_name) { raise IndexError, "slot is not available on this slide: #{slot_name}" }
+      return slot if selected_slot_name == slot_name
+
+      @selected_slot_name = slot_name
+      reset_slot_editor
+      slot
+    end
+
+    def select_table_cell(table:, row:, column:)
+      slot = selected_slot || raise(Error, "there is no selected slot")
+      rows = slot.table_rows(table: table)
+      rows.fetch(row).fetch(column)
+      @table_selection = [table, row, column]
+      @table_draft = nil
+      request_frames
+      @table_selection
+    end
+
+    def select_code_block(index)
+      slot = selected_slot || raise(Error, "there is no selected slot")
+      block = slot.nodes.select { |node| node.type == :code_block }.fetch(index)
+      @code_block_index, @code_draft = index, nil
+      request_frames
+      block
+    end
+
+    def insert_or_replace_selected_image(path)
+      slot = selected_slot || raise(Error, "there is no selected slot")
+      raise Error, "select the image slot first" unless slot.name == :image
+
+      updated = slot.empty? ? slot.insert_image(path) : slot.replace_image(path)
+      finish_slot_edit
+      updated
+    end
+
+    def replace_selected_table_cell(value)
+      slot = selected_slot || raise(Error, "there is no selected slot")
+      table, row, column = @table_selection || default_table_selection(slot)
+      updated = slot.replace_table_cell(row: row, column: column, value: value, table: table)
+      finish_slot_edit
+      updated
+    end
+
+    def replace_selected_code(text)
+      slot = selected_slot || raise(Error, "there is no selected slot")
+      updated = slot.replace_code(text, block: @code_block_index)
+      finish_slot_edit
+      updated
     end
 
     def select_slide(index)
@@ -273,28 +340,186 @@ module Hadar
       export_png_sequence(directory) if directory && !directory.empty?
     end
 
-    def body_editor_for_selected_slide
+    def slot_editor_for_selected_slide
       return [nil, nil] unless selected_index
-      return [@body_editor, @body_editor_error] if @body_editor_index == selected_index
+      unless selected_slot_name
+        @body_editor_error ||= "this slide has no editable slots"
+        return [nil, @body_editor_error]
+      end
 
-      @body_editor_index = selected_index
-      @body_editor = nil
-      @body_editor_error = nil
-      slot = deck.slide(selected_index).slot(:body)
+      slot = selected_slot
+      if slot.name == :image
+        pending_body_editor_focus(:clear) if @pending_body_editor_reload && @pending_body_editor_reload[:slot] == slot.name
+        [image_slot_editor(slot), @body_editor_error]
+      elsif slot.nodes.any? { |node| %i[table code_block].include?(node.type) }
+        pending_body_editor_focus(:clear) if @pending_body_editor_reload && @pending_body_editor_reload[:slot] == slot.name
+        panels = []
+        panels << table_slot_editor(slot) if slot.nodes.any? { |node| node.type == :table }
+        panels << code_slot_editor(slot) if slot.nodes.any? { |node| node.type == :code_block }
+        [Zaniah::Div.new.flex_col.gap(12).children(panels), @body_editor_error]
+      else
+        rich_text_slot_editor(slot)
+      end
+    rescue Error, ArgumentError, IndexError, TypeError => error
+      @body_editor_error = error.message
+      [nil, @body_editor_error]
+    end
+
+    def rich_text_slot_editor(slot)
+      key = [selected_index, selected_slot_name]
+      return [@body_editor, @body_editor_error] if @body_editor_index == key
       if slot.empty?
-        @body_editor_error = "the body slot is empty"
+        @body_editor_error = "the #{slot.name} slot is empty"
         pending_body_editor_focus(:clear) if @pending_body_editor_reload
         return [nil, @body_editor_error]
       end
 
+      @body_editor_index = key
       @body_editor = slot.rich_text
       restore_body_editor_selection
-      [@body_editor, nil]
+      [@body_editor, @body_editor_error]
     rescue Error => error
       @body_editor = nil
       @body_editor_error = error.message
       pending_body_editor_focus(:clear) if @pending_body_editor_reload
       [nil, @body_editor_error]
+    end
+
+    def slot_selector
+      buttons = deck.slide(selected_index).slots.keys.map do |name|
+        Zaniah::UI::Button.new(name.to_s.capitalize, size: :sm,
+          variant: name == selected_slot_name ? :secondary : :ghost)
+          .key([:hadar_slot, selected_index, name])
+          .on_click { select_slot(name) }
+      end
+      Zaniah::UI::ButtonGroup.new(*buttons)
+    end
+
+    def image_slot_editor(slot)
+      return Zaniah::UI::Label.new("Select an image slot to insert or replace an image.") unless slot.name == :image
+      if !slot.empty? && !(slot.nodes.one? && slot.nodes.first.type == :image)
+        return Zaniah::UI::Label.new("This image slot contains multiple images and cannot be edited safely.", tone: :muted)
+      end
+
+      panel = Zaniah::Div.new.flex_col.gap(8)
+      panel.child(Zaniah::UI::Label.new(slot.empty? ? "No image selected" : "Image: #{slot.image_path}", tone: :muted))
+      panel.child(Zaniah::UI::Button.new(slot.empty? ? "Insert image…" : "Replace image…", variant: :secondary)
+        .on_click { safely_edit_slot { prompt_for_image } })
+      panel
+    end
+
+    def table_slot_editor(slot)
+      tables = slot.nodes.select { |node| node.type == :table }
+      table, row, column = @table_selection || default_table_selection(slot)
+      rows = slot.table_rows(table: table)
+      return Zaniah::UI::Label.new("This table has no editable cells.", tone: :muted) if rows.empty? || rows.all?(&:empty?)
+
+      row = rows.index { |cells| !cells.empty? } if rows[row]&.empty?
+      column = [column, rows[row].length - 1].min
+
+      cell = rows.fetch(row).fetch(column)
+      panel = Zaniah::Div.new.flex_col.gap(8)
+        .child(Zaniah::UI::Label.new("Edit one plain-text cell; Markdown delimiters and newlines are not accepted.", tone: :muted))
+      panel.child(Zaniah::UI::Select.new(tables.each_index.map { |index| ["Table #{index + 1}", index] },
+        label: "Table", value: table).on_change do |value, _event, _context|
+          rows = slot.table_rows(table: value)
+          unless rows.empty? || rows.all?(&:empty?)
+            row = [row, rows.length - 1].min
+            row = rows.index { |cells| !cells.empty? } if rows[row].empty?
+            select_table_cell(table: value, row: row, column: [column, rows[row].length - 1].min)
+          end
+        end)
+      panel.child(Zaniah::UI::Select.new(rows.each_index.map { |index| ["Row #{index + 1}", index] },
+        label: "Row", value: row).on_change do |value, _event, _context|
+          cells = rows.fetch(value)
+          select_table_cell(table: table, row: value, column: [column, cells.length - 1].min) unless cells.empty?
+        end)
+      panel.child(Zaniah::UI::Select.new(rows[row].each_index.map { |index| ["Column #{index + 1}", index] },
+        label: "Column", value: column).on_change do |value, _event, _context|
+          select_table_cell(table: table, row: row, column: value)
+        end)
+      field_value = @table_draft.nil? ? cell : @table_draft
+      if !@table_field || @table_field.value != field_value
+        @table_field = Zaniah::UI::TextField.new(field_value, label: "Cell text")
+          .on_change { |value, _context| @table_draft = value }
+      end
+      panel.child(@table_field)
+      panel.child(Zaniah::UI::Button.new("Apply cell", size: :sm)
+        .on_click { safely_edit_slot { replace_selected_table_cell(@table_draft.nil? ? cell : @table_draft) } })
+      panel
+    end
+
+    def code_slot_editor(slot)
+      blocks = slot.nodes.select { |node| node.type == :code_block }
+      block = blocks.fetch(@code_block_index)
+      panel = Zaniah::Div.new.flex_col.gap(8)
+      panel.child(Zaniah::UI::Label.new("Code preview is syntax-highlighted when Antares supports its language.", tone: :muted))
+      panel.child(Zaniah::UI::Select.new(blocks.each_index.map { |index| ["Block #{index + 1}", index] },
+        label: "Code block", value: @code_block_index).on_change do |index, _event, _context|
+          select_code_block(index)
+        end) if blocks.length > 1
+      editor_key = [selected_index, selected_slot_name, @code_block_index]
+      editor_value = @code_draft.nil? ? slot.text_for(block) : @code_draft
+      if !@code_editor || @code_editor_key != editor_key
+        @code_editor_key = editor_key
+        @code_editor = Zaniah::UI::CodeEditor.new(editor_value, language: block.attributes[:info])
+          .w_full.flex_1.on_change { |text, _context| @code_draft = text }
+      elsif @code_editor.value != editor_value
+        @code_editor.buffer.replace(0...@code_editor.buffer.bytesize, editor_value)
+      end
+      panel.child(@code_editor)
+      panel.child(Zaniah::UI::Button.new("Apply code", size: :sm)
+        .on_click { safely_edit_slot { replace_selected_code(@code_draft.nil? ? slot.text_for(block) : @code_draft) } })
+      panel
+    end
+
+    def prompt_for_image
+      unless @main_window&.respond_to?(:prompt_for_paths)
+        raise Error, "this window backend cannot choose an image file"
+      end
+
+      path = @main_window.prompt_for_paths.first
+      insert_or_replace_selected_image(path) if path && !path.empty?
+    end
+
+    def safely_edit_slot
+      yield
+    rescue Error, ArgumentError, IndexError, TypeError => error
+      @body_editor_error = error.message
+      request_frames
+      nil
+    end
+
+    def default_table_selection(slot)
+      rows = slot.table_rows
+      [0, rows.length > 1 ? 1 : 0, 0]
+    end
+
+    def finish_slot_edit
+      @body_editor = @body_editor_index = nil
+      @body_editor_error = @table_draft = @code_draft = nil
+      @table_field = @code_editor = @code_editor_key = nil
+      request_frames
+    end
+
+    def reset_slot_editor
+      @body_editor = @body_editor_index = @body_editor_error = nil
+      @table_selection = @table_draft = nil
+      @code_block_index, @code_draft = 0, nil
+      @table_field = @code_editor = @code_editor_key = nil
+      @pending_body_editor_reload = nil
+      request_frames
+    end
+
+    def reset_slot_editor_state_after_reload
+      @body_editor = @body_editor_index = @body_editor_error = nil
+      @table_selection = @table_draft = nil
+      @code_block_index, @code_draft = 0, nil
+      @table_field = @code_editor = @code_editor_key = nil
+    end
+
+    def default_slot_name(slide)
+      slide.slots.key?(:body) ? :body : slide.slots.keys.first
     end
 
     def key_context(window)
@@ -309,7 +534,8 @@ module Hadar
           next if @selected_index == index
 
           @selected_index = index
-          @pending_body_editor_reload = nil
+          @selected_slot_name = default_slot_name(deck.slide(index))
+          reset_slot_editor
           presenter.go_to(index) if presenter.started?
           begin_slide_transition
           request_frames
@@ -358,10 +584,11 @@ module Hadar
 
     def deck_reloaded
       previous_index = selected_index
-      previous_editor = @body_editor if @body_editor_index == previous_index
+      previous_slot = selected_slot_name
+      previous_editor = @body_editor if @body_editor_index == [previous_index, previous_slot]
       previous_focus = previous_editor && @main_window&.dispatcher&.focused.equal?(previous_editor.focus_handle)
       @pending_body_editor_reload = if previous_editor
-        {index: previous_index, text: previous_editor.text, selection: previous_editor.selection,
+        {index: previous_index, slot: previous_slot, text: previous_editor.text, selection: previous_editor.selection,
          focus: previous_focus ? :pending : :none}
       end
       @selected_index = if deck.empty?
@@ -370,17 +597,17 @@ module Hadar
         [[selected_index || 0, 0].max, deck.length - 1].min
       end
       @pending_body_editor_reload = nil if @selected_index != previous_index
+      @selected_slot_name = @selected_index && deck.slide(@selected_index).slots.key?(previous_slot) ? previous_slot :
+        (@selected_index && default_slot_name(deck.slide(@selected_index)))
+      reset_slot_editor_state_after_reload
       presenter.reconcile!
-      @body_editor = nil
-      @body_editor_index = nil
-      @body_editor_error = nil
       rebuild_slide_list
       request_frames
     end
 
     def restore_body_editor_selection
       pending = @pending_body_editor_reload
-      return unless pending && pending[:index] == selected_index
+      return unless pending && pending[:index] == selected_index && pending[:slot] == selected_slot_name
 
       selection = remap_text_selection(pending[:text], @body_editor.text, pending[:selection])
       @body_editor.selection = selection || Zaniah::TextSelection.new(0)
@@ -395,7 +622,8 @@ module Hadar
     def restore_reloaded_body_editor_focus(window)
       pending = @pending_body_editor_reload
       return unless pending
-      if pending[:index] != selected_index
+      if pending[:index] != selected_index || pending[:slot] != selected_slot_name
+        window.dispatcher.focus(nil, origin: :programmatic) unless pending[:focus] == :none
         @pending_body_editor_reload = nil
         return
       end

@@ -8,9 +8,11 @@ eight template layouts.
 
 Hadar provides deck/slide/slot parsing, three JSONC themes, layout selection, a
 declarative preview tree, and virtualized thumbnail rows built with Zaniah's
-existing `Describe` and `UniformList` APIs. Its selected-slide body pane edits
-supported inline Markdown through Zaniah `RichText` and Beid; unsupported body
-syntax remains visible but read-only. Beid-backed
+existing `Describe` and `UniformList` APIs. Its selected-slide editor can switch
+among every declared layout slot. Text slots use Zaniah `RichText` and Beid;
+image slots provide insert/replace actions, while tables and fenced code expose
+source-preserving cell/body editors. Unsupported syntax remains visible but
+read-only. Beid-backed
 `<!-- notes: ... -->` comments provide speaker notes on each slide and are
 excluded from the visible preview. Image slots can insert and replace
 source-backed Markdown references; absolute asset paths are stored relative to
@@ -122,13 +124,13 @@ app.run
 
 `Application#run` polls the deck and ticks both attached windows in one loop, so
 the preview and presenter stay live together. The host supplies the windows;
-Hadar does not position them on separate displays. The body editor is backed by
-the current Markdown source and is recreated after an external reload. It keeps
-the caret or selection (and editor focus) when its text is unchanged or the
-selected text maps unambiguously around one contiguous external edit; if an edit
-overlaps the selection or makes the mapping ambiguous, the selection and focus
-are cleared rather than moved to unrelated text. Arrow, Page Up/Down, Home, and
-End navigate slides; `P` or `F5` starts presentation,
+Hadar does not position them on separate displays. Rich-text slot editors are
+backed by the current Markdown source and recreated after an external reload.
+They keep the caret or selection (and editor focus) when selected text maps
+unambiguously around one contiguous external edit; if an edit overlaps the
+selection or makes the mapping ambiguous, the selection and focus are cleared
+rather than moved to unrelated text. Arrow, Page Up/Down, Home, and End navigate
+slides; `P` or `F5` starts presentation,
 `F11` toggles fullscreen, and `Escape` exits presentation or fullscreen.
 `Ctrl/Cmd-K` opens the fuzzy command palette; `Ctrl/Cmd-S` saves an opened deck
 through its conflict-aware atomic writer.
@@ -170,7 +172,9 @@ cell text (including the header as row `0`), and `replace_table_cell(row:,
 column:, value:, table: 0)` updates exactly one cell through Beid. Indices are
 zero-based. Cell values containing Markdown delimiters, pipes, or newlines are
 rejected because Beid cannot currently round-trip escaped table-cell syntax
-safely.
+safely. In the app, choose the table-containing slot, select a table/row/column,
+edit the cell text, then use **Apply cell**; invalid edits leave the source
+unchanged.
 
 Fenced code blocks render in monospace with syntax colors from Antares/Rouge
 when the fence info names a supported language. Unknown language names remain
@@ -178,7 +182,9 @@ plain monospace. A slide containing other content besides its title and fenced
 blocks uses the body layout so its text and tables remain visible.
 `slot.replace_code(text, block: 0)` updates only the body of a
 closed fenced block and preserves its fence, info string, and surrounding
-Markdown. An omitted final newline is restored using the existing line ending;
+Markdown. The app's code pane selects among fenced blocks and applies the edited
+body without replacing neighboring content. An omitted final newline is
+restored using the existing line ending;
 unclosed and indented code blocks are display-only. A replacement containing a
 line that would close the fence is rejected.
 
@@ -194,7 +200,8 @@ precedence; otherwise Hadar selects a layout from the Beid AST. Image slots
 render local assets through `Zaniah::Image`; use `slot.resolved_image_path` to
 resolve a source destination relative to its deck. An empty image slot can use
 `insert_image(path, alt:)`; an existing single-image slot can use
-`replace_image(path)`. Relative paths are retained, while absolute paths to
+`replace_image(path)`. The app exposes these actions from the image slot using
+the platform file chooser. Relative paths are retained, while absolute paths to
 existing files are made relative to the deck's directory. Insertion and
 replacement update only the Markdown image destination or add one image node;
 the referenced assets are not copied. If an absolute selected asset lives
