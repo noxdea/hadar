@@ -69,16 +69,18 @@ RSpec.describe Hadar::Application do
       path = File.join(directory, "slides.md")
       File.write(path, "# Before\n")
       app = Hadar::Application.new(Hadar::Deck.open(path), watch: false)
-      window = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
-      app.attach(main_window: window)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      presenter = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      app.attach(main_window: main, presenter_window: presenter)
       app.deck.replace_text(app.deck.slide(0).slot(:title), "After")
 
-      window.input(Zaniah::Input::KeyDown.new("ctrl-s", false))
+      presenter.input(Zaniah::Input::KeyDown.new("ctrl-s", false))
 
       expect(File.read(path)).to eq("# After\n")
     ensure
       app&.close
-      window&.close
+      main&.close
+      presenter&.close
     end
   end
 end

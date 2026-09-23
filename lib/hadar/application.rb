@@ -224,7 +224,7 @@ module Hadar
       when :toggle_command_palette
         toggle_command_palette if target == :main
       when :save
-        save if target == :main
+        save
       when :escape
         if @command_palette&.open?
           @command_palette.close
