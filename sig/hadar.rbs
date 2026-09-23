@@ -88,4 +88,17 @@ module Hadar
     def build: (Slide slide) -> Zaniah::Element
     def surface: (Slide slide) -> Zaniah::Describe::Surface
   end
+
+  class SlideList
+    DEFAULT_ROW_HEIGHT: Integer
+
+    attr_reader deck: Deck
+    attr_reader element: Zaniah::UniformList
+    attr_reader selected_index: Integer?
+
+    def initialize: (Deck deck, ?renderer: Renderer, ?selected: Integer?, ?row_height: Numeric,
+      ?on_select: ^(Slide, Integer) -> untyped) -> void
+    def build: (width: Numeric, height: Numeric) -> Zaniah::UniformList
+    def select: (Integer index) -> Slide
+  end
 end

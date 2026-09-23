@@ -7,11 +7,11 @@ thematic breaks separate slides, and `<!-- layout: ... -->` selects one of
 eight template layouts.
 
 This initial foundation provides deck/slide/slot parsing, three JSONC themes,
-layout selection, and a text-only preview tree built with Zaniah's existing
-`Describe` vocabulary. Beid-backed `<!-- notes: ... -->` comments provide
-speaker notes on each slide and are excluded from the visible preview. It does
-not yet provide a windowed editor, image rendering, file watching, presentation
-mode, or export.
+layout selection, a text-only preview tree, and virtualized thumbnail rows built
+with Zaniah's existing `Describe` and `UniformList` APIs. Beid-backed
+`<!-- notes: ... -->` comments provide speaker notes on each slide and are
+excluded from the visible preview. It does not yet provide a windowed editor,
+image rendering, file watching, presentation mode, or export.
 
 ## Installation
 
@@ -52,6 +52,10 @@ deck.slide(0).notes           # => nil when no speaker notes are present
 
 tree = Hadar::Renderer.new.describe(deck.slide(0))
 element = Hadar::Renderer.new.build(deck.slide(0))
+
+thumbnails = Hadar::SlideList.new(deck, selected: 0,
+  on_select: ->(slide, index) { puts "Selected slide #{index + 1}: #{slide.title}" })
+list_element = thumbnails.build(width: 280, height: 640)
 ```
 
 Built-in themes are `minimal`, `dark`, and `warm`. Custom JSONC themes can be
@@ -93,10 +97,19 @@ existing unrelated path requires `overwrite: true`.
 precedence; otherwise Hadar selects a layout from the Beid AST. Image slots
 are not rendered by this initial preview foundation.
 
+`SlideList` creates thumbnail rows only for the visible viewport, using
+`Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for
+embedding in an application layout. Its `select(index)` method updates the
+selection and invokes the optional `on_select` callback. Wezen is not involved
+in live thumbnails; it encodes raster frames for export workflows.
+
 ## Development
 
-Run the specs with `bundle exec rake`. Hadar depends on Beid, Kochab, and
-Zaniah; the latter's declarative `Describe` layer is reused directly.
+Run the specs with `bundle exec rake`. Check the 100-slide virtual-list
+layout/scene-build budget with `BUDGET=1 bundle exec ruby bench/slide_list.rb`;
+the headless benchmark skips software pixel rasterization. Hadar depends on
+Beid, Kochab, and Zaniah; its declarative `Describe` and `UniformList` APIs are
+reused directly.
 
 ## License
 

@@ -221,4 +221,59 @@ RSpec.describe Hadar do
       expect(renderer.surface(slide).empty?).to be(false)
     end
   end
+
+  describe Hadar::SlideList do
+    it "builds selectable thumbnails as a virtual UniformList" do
+      deck = Hadar::Deck.parse("# First\n\n---\n\n# Second\n")
+      selected = []
+      list = described_class.new(deck, on_select: ->(slide, index) { selected << [slide, index] })
+
+      element = list.build(width: 320, height: 360)
+      window = Zaniah::Platform.open_window(backend: :headless, width: 320, height: 360)
+      begin
+        window.render(element, present: false)
+
+        expect(element).to be_a(Zaniah::UniformList)
+        expect(element.visible_range).to eq(0...2)
+        expect(element.children.first.handlers).to include(:click)
+        expect(element.children.first.children.first).to be_a(Zaniah::Element)
+        expect(list.select(1)).to equal(deck.slide(1))
+        expect(list.selected_index).to eq(1)
+        expect(selected).to eq([[deck.slide(1), 1]])
+        expect { list.select(2) }.to raise_error(IndexError)
+      ensure
+        window.close
+      end
+    end
+
+    it "only renders viewport thumbnails while scrolling a 100-slide deck" do
+      markdown = Array.new(100) { |index| "# Slide #{index + 1}" }.join("\n\n---\n\n")
+      deck = Hadar::Deck.parse(markdown)
+      rendered = []
+      renderer = instance_double(Hadar::Renderer)
+      allow(renderer).to receive(:build) do |slide|
+        rendered << slide.index
+        Zaniah::Div.new
+      end
+      list = described_class.new(deck, renderer: renderer, row_height: 180)
+      element = list.build(width: 320, height: 180)
+
+      context = Struct.new(:window).new(Struct.new(:content_size).new(Zaniah::Size.new(320, 180)))
+      element.request_layout(context)
+      expect(element.visible_range).to eq(0...2)
+      expect(rendered).to eq([0, 1])
+
+      element.scroll_y = 45 * 180
+      element.request_layout(context)
+      expect(element.visible_range).to eq(45...47)
+      expect(rendered).to eq([0, 1, 45, 46])
+    end
+
+    it "rejects invalid viewport dimensions and selection indexes" do
+      list = described_class.new(Hadar::Deck.parse("# Title\n"))
+
+      expect { list.build(width: 0, height: 200) }.to raise_error(ArgumentError, /finite and positive/)
+      expect { described_class.new(list.deck, selected: 1) }.to raise_error(IndexError)
+    end
+  end
 end
