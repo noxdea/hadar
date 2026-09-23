@@ -67,7 +67,7 @@ RSpec.describe Hadar::Application do
     require "tmpdir"
     Dir.mktmpdir("hadar-save-key") do |directory|
       path = File.join(directory, "slides.md")
-      File.write(path, "# Before\n")
+      File.binwrite(path, "# Before\n")
       app = Hadar::Application.new(Hadar::Deck.open(path), watch: false)
       main = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
       presenter = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)

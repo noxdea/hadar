@@ -17,7 +17,10 @@ module Hadar
       source_path = File.realpath(path)
       raise Error, "deck path must be a regular file" unless File.file?(source_path)
 
-      document = Beid::Document.parse(File.read(source_path, encoding: "UTF-8"))
+      source = File.binread(source_path).force_encoding(Encoding::UTF_8)
+      raise Error, "deck source is not valid UTF-8" unless source.valid_encoding?
+
+      document = Beid::Document.parse(source)
       new(document, theme: theme, source_path: source_path)
     end
 

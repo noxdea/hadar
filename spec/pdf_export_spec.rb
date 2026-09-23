@@ -70,7 +70,7 @@ RSpec.describe Hadar::Export::PDF do
         <!-- layout: blank -->
       MARKDOWN
       path = File.join(directory, "slides.md")
-      File.write(path, source)
+      File.binwrite(path, source)
       deck = Hadar::Deck.open(path)
       pdf = described_class.render(deck)
 

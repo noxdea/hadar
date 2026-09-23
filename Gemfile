@@ -7,4 +7,4 @@ gemspec
 
 gem "rake", "~> 13.0"
 gem "rspec", "~> 3.0"
-gem "rbs", "~> 4.2"
+gem "rbs", "~> 4.1.0"

@@ -385,7 +385,7 @@ RSpec.describe Hadar do
         path = File.join(directory, "deck.md")
         original = "# First\n\nOpening.\n\n---\n\n# Second\n\nOriginal body.\n"
         updated = "# First\n\nOpening.\n\n---\n\n# Revised second\n\nExternal body.\n"
-        File.write(path, original)
+        File.binwrite(path, original)
         deck = described_class.open(path)
         thumbnails = Hadar::SlideList.new(deck, selected: 1)
         stale_slot = deck.slide(1).slot(:title)
@@ -396,7 +396,7 @@ RSpec.describe Hadar do
         expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
         watcher = deck.watch(on_reload: ->(changed_deck) { callbacks << changed_deck })
 
-        File.write(path, updated)
+        File.binwrite(path, updated)
 
         expect(deck.external_change?).to be(true)
         expect(watcher.poll(timeout: 0)).to be(true)
@@ -415,11 +415,11 @@ RSpec.describe Hadar do
     it "preserves local Markdown edits and the external file when reload conflicts" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# Original\n")
+        File.binwrite(path, "# Original\n")
         deck = described_class.open(path)
         deck.slide(0).slot(:title).replace_text("Local edit")
         local_source = deck.document.source
-        File.write(path, "# External edit\n")
+        File.binwrite(path, "# External edit\n")
 
         expect { deck.reload_if_changed }
           .to raise_error(Hadar::Error, /local edits and external changes/)
@@ -431,13 +431,22 @@ RSpec.describe Hadar do
     it "keeps the current document when an external deck is not valid UTF-8" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# Original\n")
+        File.binwrite(path, "# Original\n")
         deck = described_class.open(path)
         original_document = deck.document
         File.binwrite(path, "# Invalid \xFF\n".b)
 
         expect { deck.reload_if_changed }.to raise_error(Hadar::Error, /not valid UTF-8/)
         expect(deck.document).to equal(original_document)
+      end
+    end
+
+    it "rejects a deck that is not valid UTF-8 when opening it" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.binwrite(path, "# Invalid \xFF\n".b)
+
+        expect { described_class.open(path) }.to raise_error(Hadar::Error, /not valid UTF-8/)
       end
     end
 
@@ -533,7 +542,7 @@ RSpec.describe Hadar do
 
           image_path = File.join(media, "inline.png")
           File.binwrite(image_path, png_fixture)
-          File.write(deck_path, "<!-- layout: image+text -->\n# Results\n\nQuarterly totals.\n\n![Chart](media/inline.png)\n")
+          File.binwrite(deck_path, "<!-- layout: image+text -->\n# Results\n\nQuarterly totals.\n\n![Chart](media/inline.png)\n")
           deck = Hadar::Deck.open(deck_path)
           renderer = described_class.new
           expect(renderer.describe(deck.slide(0)).children.map(&:type)).to include(:image)
@@ -587,7 +596,7 @@ RSpec.describe Hadar do
       Dir.mktmpdir do |directory|
         deck_path = File.join(directory, "slides.md")
         renderer = described_class.new
-        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Missing](media/missing.png)\n")
+        File.binwrite(deck_path, "<!-- layout: full-bleed-image -->\n![Missing](media/missing.png)\n")
         missing_deck = Hadar::Deck.open(deck_path)
 
         expect { renderer.build(missing_deck.slide(0)) }
@@ -595,13 +604,13 @@ RSpec.describe Hadar do
 
         FileUtils.mkdir_p(File.join(directory, "media"))
         File.write(File.join(directory, "media", "diagram.svg"), "<svg/>")
-        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Unsupported](media/diagram.svg)\n")
+        File.binwrite(deck_path, "<!-- layout: full-bleed-image -->\n![Unsupported](media/diagram.svg)\n")
         unsupported_deck = Hadar::Deck.open(deck_path)
 
         expect { renderer.build(unsupported_deck.slide(0)) }
           .to raise_error(Hadar::Error, /cannot render image .*unsupported image format/)
 
-        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Remote](https://example.test/chart.png)\n")
+        File.binwrite(deck_path, "<!-- layout: full-bleed-image -->\n![Remote](https://example.test/chart.png)\n")
         remote_deck = Hadar::Deck.open(deck_path)
 
         expect { renderer.build(remote_deck.slide(0)) }
@@ -690,10 +699,10 @@ RSpec.describe Hadar do
     it "clamps its current slide after the deck is externally reloaded" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# First\n\n---\n\n# Last\n")
+        File.binwrite(path, "# First\n\n---\n\n# Last\n")
         deck = Hadar::Deck.open(path)
         presenter = described_class.new(deck).start(index: 1)
-        File.write(path, "# Only slide\n")
+        File.binwrite(path, "# Only slide\n")
 
         expect(deck.reload_if_changed).to be(true)
         expect(presenter.reconcile!.current_index).to eq(0)
@@ -780,7 +789,7 @@ RSpec.describe Hadar do
     it "maps and restores the focused body selection when external text changes before it" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# Slide\n\nKeep target.\n")
+        File.binwrite(path, "# Slide\n\nKeep target.\n")
         deck = Hadar::Deck.open(path)
         backend = Object.new
         backend.define_singleton_method(:poll) { |timeout:| [] }
@@ -798,7 +807,7 @@ RSpec.describe Hadar do
         iterations = 0
         main.on_tick do
           iterations += 1
-          File.write(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
+          File.binwrite(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
           main.close if iterations == 4
         end
 
@@ -816,7 +825,7 @@ RSpec.describe Hadar do
     it "clears body selection and focus when external text changes inside the selection" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# Slide\n\nprefix target suffix\n")
+        File.binwrite(path, "# Slide\n\nprefix target suffix\n")
         deck = Hadar::Deck.open(path)
         backend = Object.new
         backend.define_singleton_method(:poll) { |timeout:| [] }
@@ -834,7 +843,7 @@ RSpec.describe Hadar do
         iterations = 0
         main.on_tick do
           iterations += 1
-          File.write(path, "# Slide\n\nprefix replaced suffix\n") if iterations == 1
+          File.binwrite(path, "# Slide\n\nprefix replaced suffix\n") if iterations == 1
           main.close if iterations == 4
         end
 
@@ -850,7 +859,7 @@ RSpec.describe Hadar do
     it "maps a focused caret along unchanged source text after an external edit" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# Slide\n\nKeep target.\n")
+        File.binwrite(path, "# Slide\n\nKeep target.\n")
         deck = Hadar::Deck.open(path)
         backend = Object.new
         backend.define_singleton_method(:poll) { |timeout:| [] }
@@ -868,7 +877,7 @@ RSpec.describe Hadar do
         iterations = 0
         main.on_tick do
           iterations += 1
-          File.write(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
+          File.binwrite(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
           main.close if iterations == 4
         end
 
@@ -885,7 +894,7 @@ RSpec.describe Hadar do
     it "wires polling reload to two headless views and retains the selected slide" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
-        File.write(path, "# First\n\n---\n\n# Second\n\nOriginal.\n")
+        File.binwrite(path, "# First\n\n---\n\n# Second\n\nOriginal.\n")
         deck = Hadar::Deck.open(path)
         backend = Object.new
         backend.define_singleton_method(:poll) { |timeout:| [] }
@@ -901,7 +910,7 @@ RSpec.describe Hadar do
         main.on_tick do
           iterations += 1
           if iterations == 1
-            File.write(path, "# First\n\n---\n\n# Revised second\n\nExternal.\n")
+            File.binwrite(path, "# First\n\n---\n\n# Revised second\n\nExternal.\n")
           elsif iterations == 3
             main.close
             presenter.close
