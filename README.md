@@ -8,8 +8,10 @@ eight template layouts.
 
 This initial foundation provides deck/slide/slot parsing, three JSONC themes,
 layout selection, and a text-only preview tree built with Zaniah's existing
-`Describe` vocabulary. It does not yet provide a windowed editor, round-trip
-editing, image rendering, file watching, presentation mode, or export.
+`Describe` vocabulary. Beid-backed `<!-- notes: ... -->` comments provide
+speaker notes on each slide and are excluded from the visible preview. It does
+not yet provide a windowed editor, image rendering, file watching, presentation
+mode, or export.
 
 ## Installation
 
@@ -46,6 +48,7 @@ MARKDOWN
 
 deck.slide(1).layout         # => :two_column
 deck.slide(1).slot(:left).text
+deck.slide(0).notes           # => nil when no speaker notes are present
 
 tree = Hadar::Renderer.new.describe(deck.slide(0))
 element = Hadar::Renderer.new.build(deck.slide(0))
@@ -65,6 +68,20 @@ deck = Hadar::Deck.open("slides.md")
 deck.slide(0).slot(:title).replace_text("Revised title")
 deck.save
 ```
+
+Speaker notes can be written as a one-line or multiline HTML comment. Their
+Markdown remains in the source unchanged and does not appear in slide slots or
+the preview tree:
+
+```markdown
+<!-- notes:
+Explain the chart's assumptions.
+
+Call out the remaining risk.
+-->
+```
+
+Read them with `deck.slide(0).notes`.
 
 For a deck created with `Deck.parse`, pass a new path to `save`. Replacing an
 existing unrelated path requires `overwrite: true`.

@@ -2,10 +2,11 @@
 
 module Hadar
   class Slide
-    attr_reader :index, :document, :nodes, :layout, :slots, :theme
+    attr_reader :index, :document, :nodes, :layout, :slots, :theme, :notes
 
     def initialize(index:, document:, nodes:, layout: nil, theme:, deck:)
       @index, @document, @nodes, @theme, @deck = index, document, nodes.freeze, theme, deck
+      @notes, @notes_ranges = extract_notes
       @layout = Layout.select(content_nodes, requested: layout)
       @slots = build_slots.freeze
       freeze
@@ -22,7 +23,54 @@ module Hadar
     private
 
     def content_nodes
-      nodes.reject { |node| layout_directive?(node) }
+      nodes.reject { |node| layout_directive?(node) || speaker_note_node?(node) }
+    end
+
+    def extract_notes
+      entries = nodes.filter_map do |node|
+        if note_directive?(node)
+          [node.range, normalize_notes(node.attributes.dig(:values, "notes"))]
+        elsif node.type == :html_block
+          multiline_notes(node)
+        end
+      end
+      [entries.empty? ? nil : entries.map(&:last).join("\n\n").freeze,
+       entries.flat_map { |range, _| note_ranges_for(range) }.freeze]
+    end
+
+    def multiline_notes(node)
+      source = document.source
+      return unless source.byteslice(node.range).match?(/\A[ \t]{0,3}<!--[ \t]*notes[ \t]*:/)
+
+      terminator = source.b.index("-->".b, node.range.begin)
+      return unless terminator && terminator + 3 <= nodes.last.range.end
+
+      range = node.range.begin...(terminator + 3)
+      values = Beid::Directive.parse(source.byteslice(range))
+      return unless values&.key?("notes")
+
+      [range, normalize_notes(values.fetch("notes"))]
+    end
+
+    def note_ranges_for(range)
+      nodes.filter_map do |node|
+        node.range if node.range.begin < range.end && range.begin < node.range.end
+      end
+    end
+
+    def normalize_notes(value)
+      value.to_s.sub(/\A(?:\r\n|\r|\n)/, "").sub(/(?:\r\n|\r|\n)\z/, "")
+    end
+
+    def note_directive?(node)
+      node.type == :directive && node.attributes[:kind] == :html_comment &&
+        node.attributes.dig(:values, "notes")
+    end
+
+    def speaker_note_node?(node)
+      note_directive?(node) || @notes_ranges.any? do |range|
+        node.range.begin < range.end && range.begin < node.range.end
+      end
     end
 
     def build_slots

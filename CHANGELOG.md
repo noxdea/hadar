@@ -7,3 +7,4 @@
 - Add validated JSONC theme loading and three bundled themes.
 - Add a text-only slide preview tree using Zaniah's declarative `Describe` API.
 - Add Beid-backed slot text replacement and atomic, conflict-aware deck saving.
+- Add Beid-backed speaker notes, excluded from slide content and preserved in source.

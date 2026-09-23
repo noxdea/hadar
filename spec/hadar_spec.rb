@@ -39,6 +39,35 @@ RSpec.describe Hadar do
       expect(slide("# Only title\n\n<!-- layout: blank -->\n").layout).to eq(:blank)
     end
 
+    it "projects one-line and multiline speaker notes without rendering them" do
+      one_line = slide("# Title\n\n<!-- notes: Say this aloud. -->\n\nVisible text.\n")
+      multiline = slide(File.read(File.join(__dir__, "fixtures", "speaker_notes.md")))
+
+      expect(one_line.notes).to eq("Say this aloud.")
+      expect(multiline.notes).to eq("Call out the revised target.\n\nEmphasize the remaining risk.")
+      expect(multiline.slot(:body).text).to eq("This paragraph is visible.")
+      description = Hadar::Renderer.new.describe(multiline)
+      expect(description.children.flat_map { |node| [node, *node.children] }
+        .map { |node| node.props[:text] }.compact)
+        .to eq(["Launch plan", "This paragraph is visible."])
+    end
+
+    it "preserves the speaker-notes comment byte-for-byte through edit and save" do
+      original = File.binread(File.join(__dir__, "fixtures", "speaker_notes.md"))
+      notes = original.match(/<!-- notes:.*?-->/m).to_s.b
+
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.binwrite(path, original)
+        deck = described_class.open(path)
+        deck.slide(0).slot(:title).replace_text("Launch sequence")
+        deck.save
+
+        expect(File.binread(path)).to eq(original.sub("# Launch plan\n", "# Launch sequence\n").b)
+        expect(File.binread(path)).to include(notes)
+      end
+    end
+
     it "selects each standard layout from the AST" do
       examples = {
         title: "# Title\n",

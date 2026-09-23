@@ -38,6 +38,7 @@ module Hadar
     attr_reader layout: Symbol
     attr_reader slots: Hash[Symbol, Slot]
     attr_reader theme: Theme
+    attr_reader notes: String?
 
     def initialize: (index: Integer, document: Beid::Document, nodes: Array[Beid::Node],
       ?layout: String | Symbol | nil, theme: Theme, deck: Deck) -> void
