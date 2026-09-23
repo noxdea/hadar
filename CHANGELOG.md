@@ -13,3 +13,4 @@
 - Insert or replace image-slot Markdown references through Beid, storing absolute local asset paths relative to the deck.
 - Render Markdown tables and Antares-highlighted fenced code blocks; add byte-preserving table-cell and fenced-code body edits through Beid.
 - Add poll-based external Markdown reloads with conflict checks that preserve unsaved local edits.
+- Add a window host that polls external reloads, retains selected-slide position, and renders a next-slide/notes/elapsed-time presenter view.

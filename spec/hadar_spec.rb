@@ -664,4 +664,86 @@ RSpec.describe Hadar do
       expect { described_class.new(list.deck, selected: 1) }.to raise_error(IndexError)
     end
   end
+
+  describe Hadar::Presenter do
+    it "exposes next-slide preview, notes, and elapsed presentation time" do
+      time = 10.0
+      deck = Hadar::Deck.parse("# Current\n\n<!-- notes: mention the source -->\n\nBody.\n\n---\n\n# Following\n\nNext content.\n")
+      presenter = described_class.new(deck, clock: -> { time })
+      presenter.start(index: 0)
+      time = 75.8
+
+      expect(presenter.current_slide.title).to eq("Current")
+      expect(presenter.next_slide.title).to eq("Following")
+      expect(presenter.notes).to eq("mention the source")
+      expect(presenter.elapsed_seconds).to eq(65.8)
+      expect(presenter.elapsed_text).to eq("1:05")
+
+      window = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      begin
+        expect { window.render(presenter.presenter_view, present: false) }.not_to raise_error
+      ensure
+        window.close
+      end
+    end
+
+    it "clamps its current slide after the deck is externally reloaded" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# First\n\n---\n\n# Last\n")
+        deck = Hadar::Deck.open(path)
+        presenter = described_class.new(deck).start(index: 1)
+        File.write(path, "# Only slide\n")
+
+        expect(deck.reload_if_changed).to be(true)
+        expect(presenter.reconcile!.current_index).to eq(0)
+        expect(presenter.current_slide.title).to eq("Only slide")
+      end
+    end
+  end
+
+  describe Hadar::Application do
+    it "wires polling reload to two headless views and retains the selected slide" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# First\n\n---\n\n# Second\n\nOriginal.\n")
+        deck = Hadar::Deck.open(path)
+        backend = Object.new
+        backend.define_singleton_method(:poll) { |timeout:| [] }
+        backend.define_singleton_method(:close) { true }
+        expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
+        app = described_class.new(deck)
+        main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+        presenter = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+        app.attach(main_window: main, presenter_window: presenter)
+        app.select_slide(1)
+        app.start_presentation
+        iterations = 0
+        main.on_tick do
+          iterations += 1
+          if iterations == 1
+            File.write(path, "# First\n\n---\n\n# Revised second\n\nExternal.\n")
+          elsif iterations == 3
+            main.close
+            presenter.close
+          end
+        end
+
+        expect { app.run }.not_to raise_error
+        expect(iterations).to eq(3)
+        expect(app.selected_index).to eq(1)
+        expect(app.slide_list.selected_index).to eq(1)
+        expect(app.presenter.current_slide.title).to eq("Revised second")
+        expect(app.deck.slide(1).slot(:body).text).to include("External.")
+        expect(main.frame_stats[:frame_ms]).to be_positive
+        expect(presenter.frame_stats[:frame_ms]).to be_positive
+      end
+    end
+
+    it "rejects running before windows are attached" do
+      app = described_class.new(Hadar::Deck.parse("# A slide\n"), watch: false)
+
+      expect { app.run }.to raise_error(Hadar::Error, /attach at least one window/)
+    end
+  end
 end

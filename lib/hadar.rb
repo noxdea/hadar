@@ -18,6 +18,8 @@ require_relative "hadar/deck"
 require_relative "hadar/deck_watcher"
 require_relative "hadar/renderer"
 require_relative "hadar/slide_list"
+require_relative "hadar/presenter"
+require_relative "hadar/application"
 
 module Hadar
   class Error < StandardError; end

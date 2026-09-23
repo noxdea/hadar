@@ -104,8 +104,24 @@ watcher.poll(timeout: 0)
 ```
 
 `deck.reload_if_changed` performs the same safe check without a platform watcher.
-Hadar has no text editor or caret model, so preserving an editing cursor remains
-the responsibility of a future editor host.
+`Hadar::Application` wires this polling into attached windows and retains the
+selected slide by index when a reload changes the deck. Its presenter view shows
+the next slide, current slide's notes, and elapsed time. While presenting, each
+window tick requests a fresh frame so elapsed time stays current:
+
+```ruby
+app = Hadar::Application.new(deck)
+main = Zaniah::Platform.open_window(title: "Hadar")
+presenter = Zaniah::Platform.open_window(title: "Hadar Presenter")
+app.attach(main_window: main, presenter_window: presenter)
+app.run
+```
+
+`Application#run` polls the deck and ticks both attached windows in one loop, so
+the preview and presenter stay live together. The host supplies the windows;
+Hadar does not yet position them on separate displays, provide fullscreen
+controls/navigation, or include a text editor/caret model. Thus reload preserves
+slide selection, but there is no caret state to preserve.
 
 Speaker notes can be written as a one-line or multiline HTML comment. Their
 Markdown remains in the source unchanged and does not appear in slide slots or

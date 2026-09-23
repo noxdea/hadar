@@ -93,6 +93,44 @@ module Hadar
     def close: () -> untyped
   end
 
+  class Presenter
+    attr_reader deck: Deck
+    attr_reader current_index: Integer?
+    attr_reader started_at: Numeric?
+
+    def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric) -> void
+    def start: (?index: Integer?) -> Presenter
+    def stop: () -> Presenter
+    def started?: () -> bool
+    def current_slide: () -> Slide?
+    def next_slide: () -> Slide?
+    def notes: () -> String?
+    def elapsed_seconds: () -> Numeric
+    def elapsed_text: () -> String
+    def slide_view: () -> Zaniah::Element
+    def presenter_view: () -> Zaniah::Element
+    def reconcile!: () -> Presenter
+  end
+
+  class Application
+    attr_reader deck: Deck
+    attr_reader renderer: Renderer
+    attr_reader presenter: Presenter
+    attr_reader selected_index: Integer?
+    attr_reader slide_list: SlideList
+
+    def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric, ?watch: bool) -> void
+    def attach: (main_window: untyped, ?presenter_window: untyped) -> Application
+    def main_view: (width: Numeric, height: Numeric) -> Zaniah::Element
+    def select_slide: (Integer index) -> Slide
+    def start_presentation: (?index: Integer?) -> Presenter
+    def stop_presentation: () -> Presenter
+    def tick: () -> bool
+    def run: () -> Application
+    def close: () -> Application
+    def stop: () -> Application
+  end
+
   class Theme
     DEFAULTS: Hash[String, untyped]
     COLOR_KEYS: Array[String]
