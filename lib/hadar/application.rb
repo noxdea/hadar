@@ -2,13 +2,34 @@
 
 module Hadar
   class Application
-    attr_reader :deck, :renderer, :presenter, :selected_index, :slide_list
+    attr_reader :deck, :renderer, :presenter, :selected_index, :slide_list, :keymap
 
-    def initialize(deck, renderer: Renderer.new, clock: Zaniah::MONOTONIC_CLOCK, watch: true)
+    def self.default_keymap(clock: Zaniah::MONOTONIC_CLOCK)
+      Zaniah::Input::Keymap.new(clock: clock)
+        .bind("right", :next_slide, context: "!in_text_field")
+        .bind("pagedown", :next_slide, context: "!in_text_field")
+        .bind("space", :next_slide, context: "!in_text_field")
+        .bind("left", :previous_slide, context: "!in_text_field")
+        .bind("pageup", :previous_slide, context: "!in_text_field")
+        .bind("home", :first_slide, context: "!in_text_field")
+        .bind("end", :last_slide, context: "!in_text_field")
+        .bind("p", :toggle_presentation, context: "!in_text_field")
+        .bind("f5", :toggle_presentation, context: "!in_text_field")
+        .bind("f11", :toggle_fullscreen)
+        .bind("ctrl-k", :toggle_command_palette)
+        .bind("cmd-k", :toggle_command_palette)
+        .bind("esc", :escape)
+    end
+
+    def initialize(deck, renderer: Renderer.new, clock: Zaniah::MONOTONIC_CLOCK, watch: true, keymap: nil)
       raise TypeError, "deck must be a Hadar::Deck" unless deck.is_a?(Deck)
       raise TypeError, "watch must be true or false" unless watch == true || watch == false
+      unless keymap.nil? || keymap.is_a?(Zaniah::Input::Keymap)
+        raise TypeError, "keymap must be a Zaniah::Input::Keymap or nil"
+      end
 
       @deck, @renderer, @clock = deck, renderer, clock
+      @keymap = keymap || self.class.default_keymap(clock: clock)
       @selected_index = deck.empty? ? nil : 0
       @presenter = Presenter.new(deck, renderer: renderer, clock: clock)
       @windows = []
@@ -18,6 +39,7 @@ module Hadar
       @transition_initial_frame = {main: false, presenter: false}
       @closed = false
       @running = false
+      @command_palette = nil
       rebuild_slide_list
       @watcher = deck.source_path && watch ? deck.watch(on_reload: ->(_updated) { deck_reloaded }) : nil
     end
@@ -43,9 +65,17 @@ module Hadar
         Zaniah::UI::Label.new("No slides")
       end
       sidebar_width = [Float(width) * 0.24, 240.0].min
-      Zaniah::Div.new.flex_row.w(width).h(height)
+      view = Zaniah::Div.new.flex_row.w(width).h(height)
         .child(slide_list.build(width: sidebar_width, height: height))
         .child(Zaniah::Div.new.flex_1.child(transition_view(preview, :main)))
+      view.child(@command_palette) if @command_palette
+      view
+    end
+
+    def command_palette = @command_palette
+
+    def export_png_sequence(directory, width: 1280, height: 720)
+      PNGSequence.write(deck, directory, renderer: renderer, width: width, height: height)
     end
 
     def select_slide(index)
@@ -153,24 +183,72 @@ module Hadar
 
       key = Zaniah::Input::Keystroke.normalize(event.keystroke)
       target = window.equal?(@presenter_window) ? :presenter : :main
-      case key
-      when "right", "pagedown", "space"
+      action = keymap.dispatch(key, context: key_context(window))
+      return if action.nil? || action == :pending
+
+      case action
+      when :next_slide
         next_slide
-      when "left", "pageup"
+      when :previous_slide
         previous_slide
-      when "home"
+      when :first_slide
         first_slide
-      when "end"
+      when :last_slide
         last_slide
-      when "p", "f5"
+      when :toggle_presentation
         presenter.started? ? stop_presentation : start_presentation
-      when "f11"
+      when :toggle_fullscreen
         fullscreen_window = target == :main && presenter.started? && @presenter_window ? :presenter : target
         toggle_fullscreen(window: fullscreen_window)
-      when "esc"
-        stop_presentation if presenter.started?
-        fullscreen_window = @presenter_window && @fullscreen[:presenter] ? :presenter : target
-        toggle_fullscreen(window: fullscreen_window) if fullscreen?(window: fullscreen_window)
+      when :toggle_command_palette
+        toggle_command_palette if target == :main
+      when :escape
+        if @command_palette&.open?
+          @command_palette.close
+        else
+          stop_presentation if presenter.started?
+          fullscreen_window = @presenter_window && @fullscreen[:presenter] ? :presenter : target
+          toggle_fullscreen(window: fullscreen_window) if fullscreen?(window: fullscreen_window)
+        end
+      end
+    end
+
+    def toggle_command_palette
+      unless @command_palette
+        require_relative "command_palette"
+        @command_palette = CommandPalette.new(command_actions)
+      end
+      @command_palette.open(!@command_palette.open?)
+      request_frames
+      @command_palette
+    rescue LoadError => error
+      raise Error, "the command palette requires Spica: #{error.message}"
+    end
+
+    def command_actions
+      {
+        "Next slide" => ->(*) { next_slide },
+        "Previous slide" => ->(*) { previous_slide },
+        "First slide" => ->(*) { first_slide },
+        "Last slide" => ->(*) { last_slide },
+        "Toggle presentation" => ->(*) { presenter.started? ? stop_presentation : start_presentation },
+        "Toggle fullscreen" => ->(*) { toggle_fullscreen(window: :main) },
+        "Export PNG sequence…" => ->(*) { prompt_png_sequence_directory }
+      }
+    end
+
+    def prompt_png_sequence_directory
+      unless @main_window.respond_to?(:prompt_for_paths)
+        raise Error, "this window backend cannot choose a directory; call export_png_sequence(directory)"
+      end
+
+      directory = @main_window.prompt_for_paths(directories: true).first
+      export_png_sequence(directory) if directory && !directory.empty?
+    end
+
+    def key_context(window)
+      (window.dispatcher.focused&.ancestors || []).reverse.each_with_object({}) do |handle, context|
+        context.merge!(handle.context)
       end
     end
 
