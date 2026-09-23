@@ -50,6 +50,14 @@ module Hadar
           Zaniah::Text.new(props.fetch(:text), size: props.fetch(:size),
             color: props.fetch(:color), font: font, wrap: :word)
         end
+        node :image, props: {path: :string}, children: :none do |props, _children|
+          path = props.fetch(:path)
+          begin
+            Zaniah::Image.new(path).w_full
+          rescue StandardError => error
+            raise Error, "cannot render image #{path.inspect}: #{error.message}"
+          end
+        end
       end
     end
 
@@ -79,9 +87,9 @@ module Hadar
       when :image_text
         [text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme),
           *text_nodes(slide.slot(:text).text, theme),
-          *text_nodes(image_label(slide.slot(:image).text), theme)] .compact
+          image_node(slide.slot(:image))].compact
       when :full_bleed_image
-        text_nodes(image_label(slide.slot(:image).text), theme)
+        [image_node(slide.slot(:image))].compact
       when :quote
         [*text_nodes(slide.slot(:quote).text, theme, size: theme.font.fetch("title_size")),
           *text_nodes(slide.slot(:attribution).text, theme, size: theme.font.fetch("body_size"), color: theme.colors.fetch("muted"))]
@@ -118,8 +126,11 @@ module Hadar
       Zaniah::Describe::Node.new(type, props, children, key)
     end
 
-    def image_label(text)
-      text.empty? ? "" : "[Image: #{text}]"
+    def image_node(slot)
+      return if slot.empty?
+
+      path = slot.resolved_image_path
+      node(:image, {path: path}, [], "slide-#{slot.slide_index}-#{slot.name}-image")
     end
 
     def slide_theme(slide) = slide.theme

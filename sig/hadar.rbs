@@ -28,6 +28,7 @@ module Hadar
     def markdown: () -> String
     def text: () -> String
     def image_path: () -> String?
+    def resolved_image_path: () -> String?
     def replace_text: (String text) -> Slot
     def rich_text: (?editable: bool) -> Zaniah::UI::RichText
     def replace_rich_text: (Zaniah::UI::RichText value) -> Slot
@@ -67,6 +68,7 @@ module Hadar
     def replace_rich_text: (Slot slot, Zaniah::UI::RichText value) -> Slot
     def replace_image: (Slot slot, String path) -> Slot
     def insert_image: (Slot slot, String path, ?alt: String?) -> Slot
+    def resolve_image_path: (String path) -> String
     def save: (?String path, ?overwrite: bool) -> Deck
     def length: () -> Integer
     alias size length

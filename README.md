@@ -7,14 +7,17 @@ thematic breaks separate slides, and `<!-- layout: ... -->` selects one of
 eight template layouts.
 
 This initial foundation provides deck/slide/slot parsing, three JSONC themes,
-layout selection, a text-only preview tree, and virtualized thumbnail rows built
+layout selection, a declarative preview tree, and virtualized thumbnail rows built
 with Zaniah's existing `Describe` and `UniformList` APIs. Beid-backed
 `<!-- notes: ... -->` comments provide speaker notes on each slide and are
 excluded from the visible preview. Image slots can insert and replace
 source-backed Markdown references; absolute asset paths are stored relative to
-the opened deck. Hadar does not copy image files, and the preview does not yet
-render them. It also does not yet provide a windowed editor, file watching,
-presentation mode, or export.
+the opened deck. Local image slots render through Zaniah's image decoder (PNG,
+GIF, and baseline JPEG); relative references resolve from the deck's directory.
+Missing, unreadable, and unsupported images fail preview construction with a
+`Hadar::Error`. Remote URLs are not fetched. Hadar does not copy image files;
+saving continues to write only the Markdown source. It also does not yet provide
+a windowed editor, file watching, presentation mode, or export.
 
 ## Installation
 
@@ -109,12 +112,15 @@ existing unrelated path requires `overwrite: true`.
 `title`, `title+body`, `two-column`, `image+text`, `full-bleed-image`,
 `quote`, `code`, and `blank` are available. Explicit layout directives take
 precedence; otherwise Hadar selects a layout from the Beid AST. Image slots
-are not rendered by this initial preview foundation. An empty image slot can
-use `insert_image(path, alt:)`; an existing single-image slot can use
+render local assets through `Zaniah::Image`; use `slot.resolved_image_path` to
+resolve a source destination relative to its deck. An empty image slot can use
+`insert_image(path, alt:)`; an existing single-image slot can use
 `replace_image(path)`. Relative paths are retained, while absolute paths to
 existing files are made relative to the deck's directory. Insertion and
 replacement update only the Markdown image destination or add one image node;
-the referenced assets are not copied.
+the referenced assets are not copied. If an absolute selected asset lives
+outside the deck directory, its saved relative reference points outside that
+directory rather than copying the file.
 
 `SlideList` creates thumbnail rows only for the visible viewport, using
 `Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for

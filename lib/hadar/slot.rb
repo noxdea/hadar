@@ -32,6 +32,11 @@ module Hadar
       destination.match?(/\Ahttps?:\/\//i) ? destination : URI::DEFAULT_PARSER.unescape(destination)
     end
 
+    def resolved_image_path
+      path = image_path
+      path && @deck.resolve_image_path(path)
+    end
+
     def replace_text(text)
       @deck.replace_text(self, text)
     end

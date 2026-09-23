@@ -2,10 +2,34 @@
 
 require "tmpdir"
 require "fileutils"
+require "zlib"
 
 RSpec.describe Hadar do
   def slide(markdown)
     Hadar::Deck.parse(markdown).slide(0)
+  end
+
+  def png_fixture
+    chunk = lambda do |type, data|
+      [data.bytesize].pack("N") + type + data + [Zlib.crc32(type + data)].pack("N")
+    end
+    header = [1, 1].pack("N2") + [8, 6, 0, 0, 0].pack("C5")
+    pixels = Zlib::Deflate.deflate("\x00\xff\x00\x00\xff".b)
+    "\x89PNG\r\n\x1a\n".b + chunk.call("IHDR", header) + chunk.call("IDAT", pixels) + chunk.call("IEND", "".b)
+  end
+
+  def jpeg_fixture
+    segment = lambda do |marker, data|
+      "\xff".b + [marker, data.bytesize + 2].pack("Cn") + data
+    end
+    quantization = segment.call(0xdb, [0, *Array.new(64, 1)].pack("C*"))
+    dc = [0, 1, 1, *Array.new(14, 0), 0, 7]
+    ac = [0x10, 1, *Array.new(15, 0), 0]
+    huffman = segment.call(0xc4, (dc + ac).pack("C*"))
+    frame_data = [8, 8, 8, 1, 1, 0x11, 0].pack("CnnC*")
+    frame = segment.call(0xc0, frame_data)
+    scan = segment.call(0xda, [1, 1, 0, 0, 63, 0].pack("C*"))
+    "\xff\xd8".b + quantization + huffman + frame + scan + "\x3f\xff\xd9".b
   end
 
   describe Hadar::Deck do
@@ -369,6 +393,69 @@ RSpec.describe Hadar do
         .to eq(["Welcome", "Hello, world!"])
       expect(renderer.build(slide)).to be_a(Zaniah::Element)
       expect(renderer.surface(slide).empty?).to be(false)
+    end
+
+    it "resolves deck-relative PNG and JPEG image slots and paints them through Zaniah" do
+      Dir.mktmpdir do |directory|
+        media = File.join(directory, "media")
+        FileUtils.mkdir_p(media)
+        deck_path = File.join(directory, "slides.md")
+        window = Zaniah::Platform.open_window(backend: :headless, width: 320, height: 360)
+
+        begin
+          {"chart image.png" => png_fixture, "photo.jpg" => jpeg_fixture}.each do |filename, bytes|
+            image_path = File.join(media, filename)
+            File.binwrite(image_path, bytes)
+            markdown_destination = filename.gsub(" ", "%20").then { |name| "media/#{name}" }
+            File.binwrite(deck_path, "<!-- layout: full-bleed-image -->\n![Chart](#{markdown_destination})\n")
+            deck = Hadar::Deck.open(deck_path)
+            renderer = described_class.new
+            description = renderer.describe(deck.slide(0))
+
+            expect(description.children.map(&:type)).to eq([:image])
+            expect(description.children.first.props.fetch(:path)).to eq(File.realpath(image_path))
+            image = renderer.build(deck.slide(0)).children.first
+            expect(image).to be_a(Zaniah::Image)
+            window.render(renderer.build(deck.slide(0)), present: false)
+          end
+
+          image_path = File.join(media, "inline.png")
+          File.binwrite(image_path, png_fixture)
+          File.write(deck_path, "<!-- layout: image+text -->\n# Results\n\nQuarterly totals.\n\n![Chart](media/inline.png)\n")
+          deck = Hadar::Deck.open(deck_path)
+          renderer = described_class.new
+          expect(renderer.describe(deck.slide(0)).children.map(&:type)).to include(:image)
+          window.render(renderer.build(deck.slide(0)), present: false)
+        ensure
+          window.close
+        end
+      end
+    end
+
+    it "reports missing, unsupported, and remote image sources clearly" do
+      Dir.mktmpdir do |directory|
+        deck_path = File.join(directory, "slides.md")
+        renderer = described_class.new
+        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Missing](media/missing.png)\n")
+        missing_deck = Hadar::Deck.open(deck_path)
+
+        expect { renderer.build(missing_deck.slide(0)) }
+          .to raise_error(Hadar::Error, /image file not found: media\/missing\.png/)
+
+        FileUtils.mkdir_p(File.join(directory, "media"))
+        File.write(File.join(directory, "media", "diagram.svg"), "<svg/>")
+        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Unsupported](media/diagram.svg)\n")
+        unsupported_deck = Hadar::Deck.open(deck_path)
+
+        expect { renderer.build(unsupported_deck.slide(0)) }
+          .to raise_error(Hadar::Error, /cannot render image .*unsupported image format/)
+
+        File.write(deck_path, "<!-- layout: full-bleed-image -->\n![Remote](https://example.test/chart.png)\n")
+        remote_deck = Hadar::Deck.open(deck_path)
+
+        expect { renderer.build(remote_deck.slide(0)) }
+          .to raise_error(Hadar::Error, /remote image URLs are not supported in slide preview/)
+      end
     end
   end
 

@@ -106,6 +106,30 @@ module Hadar
       update_image_document(slot, updated_document)
     end
 
+    def resolve_image_path(path)
+      raise TypeError, "image path must be a String" unless path.is_a?(String)
+      raise ArgumentError, "image path must not be empty or contain NUL" if path.empty? || path.include?("\0")
+
+      if path.match?(/\Ahttps?:\/\//i)
+        raise Error, "remote image URLs are not supported in slide preview: #{path}"
+      end
+      has_uri_scheme = path.match?(/\A[a-z][a-z0-9.+-]*:/i) && !path.match?(/\A[a-z]:[\\\/]/i)
+      if has_uri_scheme
+        raise Error, "image URI schemes are not supported in slide preview: #{path}"
+      end
+
+      directory = source_path ? File.dirname(source_path) : Dir.pwd
+      resolved = File.realpath(File.expand_path(path, directory))
+      raise Error, "image path is not a regular file: #{path}" unless File.file?(resolved)
+      raise Error, "image file is not readable: #{path}" unless File.readable?(resolved)
+
+      resolved
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      raise Error, "image file not found: #{path}"
+    rescue Errno::EACCES
+      raise Error, "image file is not readable: #{path}"
+    end
+
     def save(path = source_path, overwrite: false)
       raise Error, "no save path; open a file or pass a path" unless path
       raise TypeError, "save path must be a String" unless path.is_a?(String)
