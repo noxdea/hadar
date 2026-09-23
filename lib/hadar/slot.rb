@@ -26,6 +26,24 @@ module Hadar
       @deck.replace_text(self, text)
     end
 
+    def rich_text(editable: true)
+      value = RichTextProjection.new(self).build(editable: editable)
+      return value unless editable
+
+      deck, slide_index, name, source_document = @deck, @slide_index, @name, @document
+      value.on_change do |_text, rich_text|
+        raise Error, "rich text editor is stale; rebuild it from the current slot" unless deck.document.equal?(source_document)
+
+        deck.slide(slide_index).slot(name).replace_rich_text(rich_text)
+        source_document = deck.document
+      end
+      value
+    end
+
+    def replace_rich_text(value)
+      @deck.replace_rich_text(self, value)
+    end
+
     def owned_by?(deck) = @deck.equal?(deck)
 
     private

@@ -62,14 +62,25 @@ Built-in themes are `minimal`, `dark`, and `warm`. Custom JSONC themes can be
 loaded with `Hadar::Theme.load(path)` and passed to `Deck.parse` or
 `Deck.open`.
 
-Slots remain projections of the current Beid document. Replacing a single
-node's text applies a Beid edit and returns the refreshed slot; old slots are
-stale snapshots. Opened decks save atomically, preserve file permissions, and
-refuse to overwrite external changes:
+Slots remain projections of the current Beid document. `slot.rich_text` returns
+a Zaniah rich-text editor whose bold, italic, link, and code spans come from the
+Markdown source. Text edits are written back through Beid immediately when they
+stay within one source-backed text run, preserving all other source bytes and
+existing markers. Bold and italic may be added to one source-backed run; removal
+is supported for a simple complete bold/italic text run. Edits crossing Markdown
+structure, using non-Markdown styles (such as color or font size), or using
+paragraph styles are rejected rather than flattening or normalizing markup.
+Rich-text projection covers headings, paragraphs, block quotes, and text lists;
+tables, fenced code blocks, and Markdown strikethrough are not editable through
+this API yet.
+Slots returned before a successful edit are stale snapshots. Opened decks save
+atomically, preserve file permissions, and refuse to overwrite external changes:
 
 ```ruby
 deck = Hadar::Deck.open("slides.md")
 deck.slide(0).slot(:title).replace_text("Revised title")
+body = deck.slide(1).slot(:left).rich_text
+body.replace(0..."Revenue".bytesize, "Turnover") # Beid updates only that source text run
 deck.save
 ```
 

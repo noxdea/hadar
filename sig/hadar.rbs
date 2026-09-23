@@ -28,6 +28,8 @@ module Hadar
     def markdown: () -> String
     def text: () -> String
     def replace_text: (String text) -> Slot
+    def rich_text: (?editable: bool) -> Zaniah::UI::RichText
+    def replace_rich_text: (Zaniah::UI::RichText value) -> Slot
     def owned_by?: (Deck deck) -> bool
   end
 
@@ -59,6 +61,7 @@ module Hadar
     def self.from_document: (Beid::Document document, ?theme: Theme | String | nil) -> Deck
     def slide: (Integer index) -> Slide
     def replace_text: (Slot slot, String text) -> Slot
+    def replace_rich_text: (Slot slot, Zaniah::UI::RichText value) -> Slot
     def save: (?String path, ?overwrite: bool) -> Deck
     def length: () -> Integer
     alias size length

@@ -46,13 +46,30 @@ module Hadar
     def empty? = slides.empty?
 
     def replace_text(slot, text)
-      raise TypeError, "slot must be a Hadar::Slot" unless slot.is_a?(Slot)
-      raise Error, "slot belongs to another deck" unless slot.owned_by?(self)
-      raise Error, "slot is stale; retrieve it again from the current deck" unless slot.document.equal?(document)
+      validate_slot!(slot)
       raise ArgumentError, "replace_text requires a slot containing exactly one node" unless slot.nodes.one?
 
       updated_document = Beid::Editing.replace_text(document, slot.nodes.first, text)
       updated_slides = build_slides(updated_document).freeze
+      @document, @slides = updated_document, updated_slides
+      slide(slot.slide_index).slot(slot.name)
+    end
+
+    def replace_rich_text(slot, value)
+      validate_slot!(slot)
+      raise TypeError, "value must be a Zaniah::UI::RichText" unless value.is_a?(Zaniah::UI::RichText)
+      raise Error, "rich text must be editable" unless value.editable?
+
+      updated_document = RichTextProjection.new(slot).replace(value)
+      return slot if updated_document.equal?(document)
+
+      updated_slides = build_slides(updated_document).freeze
+      updated_slot = updated_slides.fetch(slot.slide_index).slot(slot.name)
+      projected = RichTextProjection.new(updated_slot).build(editable: false)
+      unless updated_slot.text == value.text && projected.runs == value.runs
+        raise Error, "rich text edit cannot be represented without changing untouched Markdown"
+      end
+
       @document, @slides = updated_document, updated_slides
       slide(slot.slide_index).slot(slot.name)
     end
@@ -72,6 +89,12 @@ module Hadar
     end
 
     private
+
+    def validate_slot!(slot)
+      raise TypeError, "slot must be a Hadar::Slot" unless slot.is_a?(Slot)
+      raise Error, "slot belongs to another deck" unless slot.owned_by?(self)
+      raise Error, "slot is stale; retrieve it again from the current deck" unless slot.document.equal?(document)
+    end
 
     def self.theme_from_front_matter(document, directory)
       return unless document.front_matter

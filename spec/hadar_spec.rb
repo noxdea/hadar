@@ -142,6 +142,104 @@ RSpec.describe Hadar do
       end
     end
 
+    it "projects mixed Markdown formatting into RichText and writes a run edit without changing other bytes" do
+      original = <<~'MARKDOWN'
+        ---
+        theme: warm
+        ---
+
+        # Keep *this* heading
+
+        Body with **bold** and _italic_, `code`, and [link](https://example.test/a_(b)).
+
+        <!-- notes: Keep these notes. -->
+      MARKDOWN
+      original = original.gsub("\n", "\r\n")
+      expected = original.sub("bold", "更新").sub("link", "source")
+
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.binwrite(path, original)
+        deck = described_class.open(path)
+        rich_text = deck.slide(0).slot(:body).rich_text
+
+        expect(rich_text).to be_a(Zaniah::UI::RichText)
+        expect(rich_text.editable?).to be(true)
+        expect(rich_text.text).to eq("Body with bold and italic, code, and link.")
+        expect(rich_text.runs.find { |run| run[:text].include?("bold") }[:bold]).to be(true)
+        expect(rich_text.runs.find { |run| run[:text].include?("italic") }[:italic]).to be(true)
+        expect(rich_text.runs.find { |run| run[:text].include?("link") }[:link])
+          .to eq("https://example.test/a_(b)")
+        expect(rich_text.runs.find { |run| run[:text] == "code" }[:font]).to eq("monospace")
+
+        offset = rich_text.text.index("bold")
+        rich_text.replace(offset...(offset + "bold".bytesize), "更新")
+        offset = rich_text.text[0...rich_text.text.index("link")].bytesize
+        rich_text.replace(offset...(offset + "link".bytesize), "source")
+
+        expect(deck.document.source).to eq(expected)
+        expect(deck.slide(0).slot(:body).markdown).to include("**更新** and _italic_, `code`, and [source](https://example.test/a_(b))")
+        deck.save
+        expect(File.binread(path)).to eq(expected.b)
+      end
+    end
+
+    it "rejects rich-text style changes rather than normalizing source markup" do
+      source = "# Title\n\nPlain text.\n"
+      deck = described_class.parse(source)
+      rich_text = deck.slide(0).slot(:body).rich_text
+
+      expect { rich_text.apply(0...5, color: "#ff0000") }
+        .to raise_error(Hadar::Error, /only bold and italic/)
+      expect(deck.document.source).to eq(source)
+    end
+
+    it "writes simple bold changes through Beid without rewriting adjacent Markdown" do
+      source = "# Title\n\nPlain **bold** and _italic_.\n"
+      deck = described_class.parse(source)
+      rich_text = deck.slide(0).slot(:body).rich_text
+
+      rich_text.apply(0...5, bold: true)
+      expect(deck.document.source).to eq("# Title\n\n**Plain** **bold** and _italic_.\n")
+
+      rich_text.apply(0...5, bold: nil)
+      expect(deck.document.source).to eq(source)
+    end
+
+    it "edits formatted list text without changing list markers or other items" do
+      source = "# Tasks\n\n- **first**\n- second\n"
+      deck = described_class.parse(source)
+      rich_text = deck.slide(0).slot(:body).rich_text
+
+      expect(rich_text.text).to eq("• first\n• second")
+      offset = rich_text.text[0...rich_text.text.index("first")].bytesize
+      rich_text.replace(offset...(offset + "first".bytesize), "done")
+
+      expect(deck.document.source).to eq("# Tasks\n\n- **done**\n- second\n")
+      expect(deck.slide(0).slot(:body).markdown).to eq("- **done**\n- second\n")
+    end
+
+    it "rejects text edits crossing inline markup without flattening the source" do
+      source = "# Title\n\nPlain **bold** text.\n"
+      deck = described_class.parse(source)
+      rich_text = deck.slide(0).slot(:body).rich_text
+
+      expect { rich_text.replace(0...10, "replacement") }
+        .to raise_error(Hadar::Error, /one Markdown text run/)
+      expect(deck.document.source).to eq(source)
+    end
+
+    it "rejects a stale RichText editor after another Beid edit changes its document" do
+      deck = described_class.parse("# Title\n\nOriginal text.\n")
+      rich_text = deck.slide(0).slot(:body).rich_text
+      deck.slide(0).slot(:body).replace_text("External edit.")
+      source = deck.document.source
+
+      expect { rich_text.insert(rich_text.text.bytesize, " stale") }
+        .to raise_error(Hadar::Error, /rich text editor is stale/)
+      expect(deck.document.source).to eq(source)
+    end
+
     it "refuses to overwrite a file changed outside Hadar" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")
