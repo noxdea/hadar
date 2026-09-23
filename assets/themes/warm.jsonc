@@ -1,0 +1,11 @@
+{
+  "name": "Paper",
+  "colors": {
+    "background": "#fbf5e9",
+    "text": "#302820",
+    "muted": "#75695b",
+    "accent": "#9c4f35"
+  },
+  "font": { "family": "sans-serif", "title_size": 46, "body_size": 27 },
+  "spacing": { "margin": 68, "gap": 26 }
+}

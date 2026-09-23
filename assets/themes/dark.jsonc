@@ -1,0 +1,11 @@
+{
+  "name": "Midnight",
+  "colors": {
+    "background": "#111820",
+    "text": "#edf2f7",
+    "muted": "#aab7c4",
+    "accent": "#79b8ff"
+  },
+  "font": { "family": "sans-serif", "title_size": 44, "body_size": 26 },
+  "spacing": { "margin": 64, "gap": 24 }
+}

@@ -1,0 +1,79 @@
+module Hadar
+  VERSION: String
+
+  class Error < StandardError
+  end
+
+  module Layout
+    class Definition
+      attr_reader name: Symbol
+      attr_reader slots: Array[Symbol]
+    end
+
+    NAMES: Array[Symbol]
+
+    def self.fetch: (String | Symbol name) -> Definition
+    def self.select: (Array[Beid::Node] nodes, ?requested: String | Symbol | nil) -> Symbol
+  end
+
+  class Slot
+    attr_reader name: Symbol
+    attr_reader nodes: Array[Beid::Node]
+    attr_reader document: Beid::Document
+
+    def initialize: (name: String | Symbol, nodes: Array[Beid::Node], document: Beid::Document) -> void
+    def empty?: () -> bool
+    def markdown: () -> String
+    def text: () -> String
+  end
+
+  class Slide
+    attr_reader index: Integer
+    attr_reader document: Beid::Document
+    attr_reader nodes: Array[Beid::Node]
+    attr_reader layout: Symbol
+    attr_reader slots: Hash[Symbol, Slot]
+    attr_reader theme: Theme
+
+    def slot: (String | Symbol name) -> Slot
+    def title: () -> String
+  end
+
+  class Deck
+    attr_reader document: Beid::Document
+    attr_reader slides: Array[Slide]
+    attr_reader theme: Theme
+
+    def self.parse: (String markdown, ?theme: Theme | String | nil) -> Deck
+    def self.open: (String path, ?theme: Theme | String | nil) -> Deck
+    def self.from_document: (Beid::Document document, ?theme: Theme | String | nil) -> Deck
+    def slide: (Integer index) -> Slide
+    def length: () -> Integer
+    alias size length
+    def empty?: () -> bool
+  end
+
+  class Theme
+    DEFAULTS: Hash[String, untyped]
+    COLOR_KEYS: Array[String]
+    FONT_KEYS: Array[String]
+    SPACING_KEYS: Array[String]
+
+    attr_reader name: String
+    attr_reader colors: Hash[String, String]
+    attr_reader font: Hash[String, String | Numeric]
+    attr_reader spacing: Hash[String, Numeric]
+
+    def self.default: () -> Theme
+    def self.builtin: (String name) -> Theme
+    def self.load: (String path) -> Theme
+    def initialize: (Hash[String, untyped] value) -> void
+  end
+
+  class Renderer
+    def initialize: () -> void
+    def describe: (Slide slide) -> Zaniah::Describe::Node
+    def build: (Slide slide) -> Zaniah::Element
+    def surface: (Slide slide) -> Zaniah::Describe::Surface
+  end
+end

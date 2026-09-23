@@ -1,0 +1,12 @@
+{
+  // A bright, high-contrast deck theme.
+  "name": "Minimal",
+  "colors": {
+    "background": "#ffffff",
+    "text": "#18212b",
+    "muted": "#5c6875",
+    "accent": "#315b7c"
+  },
+  "font": { "family": "sans-serif", "title_size": 44, "body_size": 26 },
+  "spacing": { "margin": 64, "gap": 24 }
+}

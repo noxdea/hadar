@@ -1,0 +1,68 @@
+# frozen_string_literal: true
+
+module Hadar
+  class Slot
+    attr_reader :name, :nodes, :document
+
+    def initialize(name:, nodes:, document:)
+      @name = name.to_sym
+      @nodes = nodes.freeze
+      @document = document
+      freeze
+    end
+
+    def empty? = nodes.empty?
+
+    def markdown
+      nodes.map { |node| document.source.byteslice(node.range) }.join("\n")
+    end
+
+    def text
+      nodes.map { |node| plain_text(node) }.reject(&:empty?).join("\n")
+    end
+
+    private
+
+    def plain_text(node)
+      case node.type
+      when :text, :code_span then node.attributes.fetch(:text, "")
+      when :image then node.attributes.fetch(:label, "")
+      when :break then "\n"
+      when :task_checkbox then ""
+      when :code_block then code_text(node)
+      when :html_block then node.attributes.fetch(:text, "")
+      when :ordered_list, :list
+        node.children.each_with_index.map { |item, index| list_item_text(item, index) }.join("\n")
+      when :table
+        node.children.map { |row| plain_text(row) }.join("\n")
+      when :table_row
+        node.children.map { |cell| plain_text(cell) }.join(" | ")
+      when :block_quote
+        node.children.map { |child| plain_text(child) }.join("\n")
+      else node.children.map { |child| plain_text(child) }.join
+      end
+    end
+
+    def list_item_text(node, index)
+      marker = if node.attributes[:task]
+        node.attributes[:checked] ? "☑ " : "☐ "
+      elsif node.attributes[:ordered]
+        "#{node.attributes[:start] || index + 1}. "
+      else
+        "• "
+      end
+      marker + node.children.map { |child| plain_text(child) }.join
+    end
+
+    def code_text(node)
+      lines = document.source.byteslice(node.range).to_s.lines
+      if node.attributes[:fence]
+        lines.shift
+        lines.pop if node.attributes[:closed]
+        lines.join
+      else
+        lines.map { |line| line.sub(/\A(?:    |\t)/, "") }.join
+      end
+    end
+  end
+end
