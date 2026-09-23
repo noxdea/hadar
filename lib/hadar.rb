@@ -5,6 +5,7 @@ require_relative "hadar/version"
 require "beid"
 require "antares"
 require "kochab"
+require "okab"
 require "zaniah"
 require "zaniah/ui"
 
@@ -24,3 +25,5 @@ require_relative "hadar/application"
 module Hadar
   class Error < StandardError; end
 end
+
+require_relative "hadar/export/pdf"

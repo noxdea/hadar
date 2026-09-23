@@ -14,3 +14,4 @@
 - Render Markdown tables and Antares-highlighted fenced code blocks; add byte-preserving table-cell and fenced-code body edits through Beid.
 - Add poll-based external Markdown reloads with conflict checks that preserve unsaved local edits.
 - Add a window host that polls external reloads, retains selected-slide position, and renders a next-slide/notes/elapsed-time presenter view.
+- Export the eight slide layouts as searchable PDF pages with embedded TrueType fonts through Okab.

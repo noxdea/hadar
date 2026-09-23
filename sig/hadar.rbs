@@ -167,4 +167,16 @@ module Hadar
     def build: (width: Numeric, height: Numeric) -> Zaniah::UniformList
     def select: (Integer index) -> Slide
   end
+
+  module Export
+    class PDF
+      WIDTH: Integer
+      HEIGHT: Integer
+
+      def self.render: (Deck deck, ?font: String | Okab::Font | Alhena::Font | nil) -> String
+      def self.write: (Deck deck, String path, ?font: String | Okab::Font | Alhena::Font | nil) -> String
+      def initialize: (Deck deck, ?font: String | Okab::Font | Alhena::Font | nil) -> void
+      def render: () -> String
+    end
+  end
 end
