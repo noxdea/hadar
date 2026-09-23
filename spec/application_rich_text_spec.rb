@@ -48,4 +48,22 @@ RSpec.describe Hadar::Application do
   ensure
     app&.close
   end
+
+  it "drops the prior slide editor when the selected slide has no body slot" do
+    markdown = "# First\n\nBody text.\n\n---\n\n<!-- layout: blank -->\n"
+    app = described_class.new(Hadar::Deck.parse(markdown), watch: false)
+    window = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 400)
+    app.attach(main_window: window)
+    window.tick
+    expect(app.body_editor).to be_a(Zaniah::UI::RichText)
+
+    app.select_slide(1)
+    window.tick
+
+    expect(app.body_editor).to be_nil
+    expect(app.instance_variable_get(:@body_editor_error)).to eq("the body slot is empty")
+  ensure
+    app&.close
+    window&.close
+  end
 end

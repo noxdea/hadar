@@ -275,6 +275,7 @@ module Hadar
       return [@body_editor, @body_editor_error] if @body_editor_index == selected_index
 
       @body_editor_index = selected_index
+      @body_editor = nil
       @body_editor_error = nil
       slot = deck.slide(selected_index).slot(:body)
       if slot.empty?
