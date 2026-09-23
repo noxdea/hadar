@@ -70,7 +70,7 @@ module Hadar
         raise Error, "deck has local edits and external changes; refusing to discard either version"
       end
 
-      source.force_encoding(Encoding::UTF_8)
+      source = source.dup.force_encoding(Encoding::UTF_8)
       raise Error, "external deck is not valid UTF-8; keeping the current document" unless source.valid_encoding?
 
       updated_document = Beid::Document.parse(source)
@@ -327,21 +327,16 @@ module Hadar
     end
 
     def read_source_snapshot
-      3.times do
-        before = source_signature(source_path)
-        source = File.binread(source_path)
-        after = source_signature(source_path)
-        return [source, after] if before == after
-      end
-      raise Error, "deck file is changing while it is being read; retry reload"
+      snapshot = Xamidimura::SourceRevision.read(source_path, reject_symlink: true)
+      [snapshot.bytes, snapshot.signature]
+    rescue Xamidimura::Error => error
+      raise Error, error.message
     end
 
     def source_signature(path)
-      stat = File.lstat(path)
-      raise Error, "deck path is not a regular file" unless stat.file? && !stat.symlink?
-
-      [stat.dev, stat.ino, stat.size, stat.mtime.to_i, stat.mtime.nsec,
-       stat.ctime.to_i, stat.ctime.nsec].freeze
+      Xamidimura::SourceRevision.signature(path, reject_symlink: true)
+    rescue Xamidimura::Error => error
+      raise Error, error.message
     end
 
     def theme_for(source_document)

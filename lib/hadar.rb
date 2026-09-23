@@ -6,6 +6,7 @@ require "beid"
 require "antares"
 require "kochab"
 require "okab"
+require "xamidimura"
 require "zaniah"
 require "zaniah/ui"
 

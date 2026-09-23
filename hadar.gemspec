@@ -26,10 +26,11 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |path| File.basename(path) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "beid", ">= 0.1.0"
-  spec.add_dependency "antares", ">= 0.1.0"
-  spec.add_dependency "kochab", ">= 0.2.0"
-  spec.add_dependency "okab", ">= 0.1.0"
-  spec.add_dependency "spica", ">= 0.1.0"
-  spec.add_dependency "zaniah", ">= 0.6.0"
+  spec.add_dependency "beid", "~> 0.1.0"
+  spec.add_dependency "antares", "~> 0.2.1"
+  spec.add_dependency "kochab", "~> 0.2.0"
+  spec.add_dependency "okab", "~> 0.1.0"
+  spec.add_dependency "spica", "~> 0.1.0"
+  spec.add_dependency "xamidimura", "~> 0.1.0"
+  spec.add_dependency "zaniah", "~> 0.6.0"
 end
