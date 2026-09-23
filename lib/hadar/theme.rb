@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# APP-SPECIFIC: theme schema and loading remain local; Q6 found no shared three-app contract.
 module Hadar
   class Theme
     DEFAULTS = {

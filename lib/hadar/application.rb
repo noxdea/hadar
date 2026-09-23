@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# APP-SPECIFIC: presenter commands and keymap remain local; Q6 found no shared three-app contract.
 module Hadar
   class Application
     attr_reader :deck, :renderer, :presenter, :selected_index, :selected_slot_name, :slide_list, :keymap, :body_editor
