@@ -2,7 +2,7 @@
 
 module Hadar
   class Application
-    attr_reader :deck, :renderer, :presenter, :selected_index, :slide_list, :keymap
+    attr_reader :deck, :renderer, :presenter, :selected_index, :slide_list, :keymap, :body_editor
 
     def self.default_keymap(clock: Zaniah::MONOTONIC_CLOCK)
       Zaniah::Input::Keymap.new(clock: clock)
@@ -40,6 +40,9 @@ module Hadar
       @closed = false
       @running = false
       @command_palette = nil
+      @body_editor = nil
+      @body_editor_index = nil
+      @body_editor_error = nil
       rebuild_slide_list
       @watcher = deck.source_path && watch ? deck.watch(on_reload: ->(_updated) { deck_reloaded }) : nil
     end
@@ -65,9 +68,21 @@ module Hadar
         Zaniah::UI::Label.new("No slides")
       end
       sidebar_width = [Float(width) * 0.24, 240.0].min
+      workspace = Zaniah::Div.new.flex_row.flex_1
+        .child(Zaniah::Div.new.flex_1.child(transition_view(preview, :main)))
+      unless presenter.started?
+        editor, error = body_editor_for_selected_slide
+        editor_width = [[(Float(width) - sidebar_width) * 0.36, 420].min, 160].max
+        editor_pane = Zaniah::Div.new.w(editor_width).h_full.p(12).gap(8)
+          .style(flex_direction: :column, border: 1, border_color: deck.theme.colors.fetch("muted"))
+          .child(Zaniah::UI::Label.new("Body", size: :sm))
+        editor_pane.child(editor.w_full.flex_1) if editor
+        editor_pane.child(Zaniah::UI::Label.new("Editing unavailable: #{error}", tone: :muted)) if error
+        workspace.child(editor_pane)
+      end
       view = Zaniah::Div.new.flex_row.w(width).h(height)
         .child(slide_list.build(width: sidebar_width, height: height))
-        .child(Zaniah::Div.new.flex_1.child(transition_view(preview, :main)))
+        .child(workspace)
       view.child(@command_palette) if @command_palette
       view
     end
@@ -246,6 +261,26 @@ module Hadar
       export_png_sequence(directory) if directory && !directory.empty?
     end
 
+    def body_editor_for_selected_slide
+      return [nil, nil] unless selected_index
+      return [@body_editor, @body_editor_error] if @body_editor_index == selected_index
+
+      @body_editor_index = selected_index
+      @body_editor_error = nil
+      slot = deck.slide(selected_index).slot(:body)
+      if slot.empty?
+        @body_editor_error = "the body slot is empty"
+        return [nil, @body_editor_error]
+      end
+
+      @body_editor = slot.rich_text
+      [@body_editor, nil]
+    rescue Error => error
+      @body_editor = nil
+      @body_editor_error = error.message
+      [nil, @body_editor_error]
+    end
+
     def key_context(window)
       (window.dispatcher.focused&.ancestors || []).reverse.each_with_object({}) do |handle, context|
         context.merge!(handle.context)
@@ -311,6 +346,9 @@ module Hadar
         [[selected_index || 0, 0].max, deck.length - 1].min
       end
       presenter.reconcile!
+      @body_editor = nil
+      @body_editor_index = nil
+      @body_editor_error = nil
       rebuild_slide_list
       request_frames
     end
