@@ -6,9 +6,11 @@ source nodes instead of becoming a second mutable copy. Markdown `---`
 thematic breaks separate slides, and `<!-- layout: ... -->` selects one of
 eight template layouts.
 
-This initial foundation provides deck/slide/slot parsing, three JSONC themes,
-layout selection, a declarative preview tree, and virtualized thumbnail rows built
-with Zaniah's existing `Describe` and `UniformList` APIs. Beid-backed
+Hadar provides deck/slide/slot parsing, three JSONC themes, layout selection, a
+declarative preview tree, and virtualized thumbnail rows built with Zaniah's
+existing `Describe` and `UniformList` APIs. Its selected-slide body pane edits
+supported inline Markdown through Zaniah `RichText` and Beid; unsupported body
+syntax remains visible but read-only. Beid-backed
 `<!-- notes: ... -->` comments provide speaker notes on each slide and are
 excluded from the visible preview. Image slots can insert and replace
 source-backed Markdown references; absolute asset paths are stored relative to
@@ -16,9 +18,10 @@ the opened deck. Local image slots render through Zaniah's image decoder (PNG,
 GIF, and baseline JPEG); relative references resolve from the deck's directory.
 Missing, unreadable, and unsupported images fail preview construction with a
 `Hadar::Error`. Remote URLs are not fetched. Hadar does not copy image files;
-saving continues to write only the Markdown source. Hadar provides a poll-based
-file watcher for hosts to reload external Markdown edits; it does not yet provide
-a windowed editor, presentation mode, or export.
+saving continues to write only the Markdown source. Its window host polls for
+external Markdown edits and can show a next-slide, notes, and elapsed-time
+presenter view. The host supports slide navigation, fullscreen, a fuzzy command
+palette, and PNG-sequence export. It does not place windows on separate displays.
 
 ## Installation
 
@@ -119,9 +122,31 @@ app.run
 
 `Application#run` polls the deck and ticks both attached windows in one loop, so
 the preview and presenter stay live together. The host supplies the windows;
-Hadar does not yet position them on separate displays, provide fullscreen
-controls/navigation, or include a text editor/caret model. Thus reload preserves
-slide selection, but there is no caret state to preserve.
+Hadar does not position them on separate displays. The body editor is backed by
+the current Markdown source and is recreated after an external reload, so reload
+retains slide selection but not an in-progress caret or text selection. Arrow,
+Page Up/Down, Home, and End navigate slides; `P` or `F5` starts presentation,
+`F11` toggles fullscreen, and `Escape` exits presentation or fullscreen.
+`Ctrl/Cmd-K` opens the fuzzy command palette; `Ctrl/Cmd-S` saves an opened deck
+through its conflict-aware atomic writer.
+
+PDF export produces one searchable 16:9 page for every slide, including all
+eight layouts. Pass a TrueType font that contains every visible character; the
+default font is selected from Zaniah's local font database:
+
+```ruby
+Hadar::Export::PDF.write(deck, "slides.pdf", font: "/path/to/font.ttf")
+```
+
+Okab currently requires TrueType outlines for PDF embedding. Hadar exports local
+PNG and JPEG images; remote images and other image formats are rejected.
+
+PNG sequence export renders all slides at the requested dimensions using
+Zaniah's headless renderer. It refuses to overwrite existing frames:
+
+```ruby
+app.export_png_sequence("slides-png", width: 1280, height: 720)
+```
 
 Speaker notes can be written as a one-line or multiline HTML comment. Their
 Markdown remains in the source unchanged and does not appear in slide slots or
@@ -154,8 +179,9 @@ Markdown. An omitted final newline is restored using the existing line ending;
 unclosed and indented code blocks are display-only. A replacement containing a
 line that would close the fence is rejected.
 
-For a deck created with `Deck.parse`, pass a new path to `save`. Replacing an
-existing unrelated path requires `overwrite: true`.
+For a deck created with `Deck.parse`, pass a new path to `app.save(path)`.
+Replacing an existing unrelated path requires `overwrite: true`. Opened decks
+can use `app.save` or `Ctrl/Cmd-S`; the same external-change check applies.
 
 ## Layouts
 
@@ -183,8 +209,8 @@ in live thumbnails; it encodes raster frames for export workflows.
 Run the specs with `bundle exec rake`. Check the 100-slide virtual-list
 layout/scene-build budget with `BUDGET=1 bundle exec ruby bench/slide_list.rb`;
 the headless benchmark skips software pixel rasterization. Hadar depends on
-Beid, Kochab, and Zaniah; its declarative `Describe` and `UniformList` APIs are
-reused directly.
+Beid, Antares, Kochab, Okab, Spica, and Zaniah; its declarative `Describe`,
+`UniformList`, and input keymap APIs are reused directly.
 
 ## License
 

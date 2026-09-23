@@ -7,8 +7,8 @@ Gem::Specification.new do |spec|
   spec.version = Hadar::VERSION
   spec.authors = ["Yudai Takada"]
   spec.email = ["t.yudai92@gmail.com"]
-  spec.summary = "Markdown-backed presentation deck model and preview"
-  spec.description = "Projects Beid Markdown ASTs into template-based slide decks, loads JSONC themes, and builds a Zaniah declarative preview tree."
+  spec.summary = "Markdown-backed presentation editor and preview"
+  spec.description = "Projects Beid Markdown ASTs into template-based slide decks, edits supported source-backed text, and exports PDF or PNG."
   spec.homepage = "https://github.com/noxdea/hadar"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
@@ -30,5 +30,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "antares", ">= 0.1.0"
   spec.add_dependency "kochab", ">= 0.2.0"
   spec.add_dependency "okab", ">= 0.1.0"
+  spec.add_dependency "spica", ">= 0.1.0"
   spec.add_dependency "zaniah", ">= 0.6.0"
 end

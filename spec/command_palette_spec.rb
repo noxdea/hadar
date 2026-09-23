@@ -62,4 +62,23 @@ RSpec.describe Hadar::Application do
     app&.close
     window&.close
   end
+
+  it "binds Ctrl-S to the existing conflict-aware deck save" do
+    require "tmpdir"
+    Dir.mktmpdir("hadar-save-key") do |directory|
+      path = File.join(directory, "slides.md")
+      File.write(path, "# Before\n")
+      app = Hadar::Application.new(Hadar::Deck.open(path), watch: false)
+      window = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      app.attach(main_window: window)
+      app.deck.replace_text(app.deck.slide(0).slot(:title), "After")
+
+      window.input(Zaniah::Input::KeyDown.new("ctrl-s", false))
+
+      expect(File.read(path)).to eq("# After\n")
+    ensure
+      app&.close
+      window&.close
+    end
+  end
 end

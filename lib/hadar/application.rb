@@ -18,6 +18,8 @@ module Hadar
         .bind("f11", :toggle_fullscreen)
         .bind("ctrl-k", :toggle_command_palette)
         .bind("cmd-k", :toggle_command_palette)
+        .bind("ctrl-s", :save)
+        .bind("cmd-s", :save)
         .bind("esc", :escape)
     end
 
@@ -91,6 +93,10 @@ module Hadar
 
     def export_png_sequence(directory, width: 1280, height: 720)
       PNGSequence.write(deck, directory, renderer: renderer, width: width, height: height)
+    end
+
+    def save(path = nil, overwrite: false)
+      path ? deck.save(path, overwrite: overwrite) : deck.save(overwrite: overwrite)
     end
 
     def select_slide(index)
@@ -217,6 +223,8 @@ module Hadar
         toggle_fullscreen(window: fullscreen_window)
       when :toggle_command_palette
         toggle_command_palette if target == :main
+      when :save
+        save if target == :main
       when :escape
         if @command_palette&.open?
           @command_palette.close
@@ -248,6 +256,7 @@ module Hadar
         "Last slide" => ->(*) { last_slide },
         "Toggle presentation" => ->(*) { presenter.started? ? stop_presentation : start_presentation },
         "Toggle fullscreen" => ->(*) { toggle_fullscreen(window: :main) },
+        "Save" => ->(*) { save },
         "Export PNG sequence…" => ->(*) { prompt_png_sequence_directory }
       }
     end

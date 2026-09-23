@@ -101,6 +101,7 @@ module Hadar
     def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric) -> void
     def start: (?index: Integer?) -> Presenter
     def stop: () -> Presenter
+    def go_to: (Integer index) -> Presenter
     def started?: () -> bool
     def current_slide: () -> Slide?
     def next_slide: () -> Slide?
@@ -118,17 +119,39 @@ module Hadar
     attr_reader presenter: Presenter
     attr_reader selected_index: Integer?
     attr_reader slide_list: SlideList
+    attr_reader keymap: Zaniah::Input::Keymap
+    attr_reader body_editor: Zaniah::UI::RichText?
 
-    def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric, ?watch: bool) -> void
+    def self.default_keymap: (?clock: ^() -> Numeric) -> Zaniah::Input::Keymap
+    def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric, ?watch: bool,
+      ?keymap: Zaniah::Input::Keymap) -> void
     def attach: (main_window: untyped, ?presenter_window: untyped) -> Application
     def main_view: (width: Numeric, height: Numeric) -> Zaniah::Element
+    def command_palette: () -> CommandPalette?
+    def export_png_sequence: (String directory, ?width: Integer, ?height: Integer) -> Array[String]
+    def save: (?String path, ?overwrite: bool) -> Deck
     def select_slide: (Integer index) -> Slide
+    def next_slide: () -> Slide?
+    def previous_slide: () -> Slide?
+    def first_slide: () -> Slide?
+    def last_slide: () -> Slide?
+    def toggle_fullscreen: (?window: :main | :presenter) -> bool
+    def fullscreen?: (?window: :main | :presenter) -> bool
     def start_presentation: (?index: Integer?) -> Presenter
     def stop_presentation: () -> Presenter
     def tick: () -> bool
     def run: () -> Application
     def close: () -> Application
     def stop: () -> Application
+  end
+
+  class CommandPalette
+    attr_reader query: String
+
+    def initialize: (Hash[String, ^(*untyped) -> untyped] commands) -> void
+    def query=: (String value) -> String
+    def matches: (?Integer limit) -> Array[Spica::Match]
+    def choose: (String label, ?untyped event, ?untyped context) -> untyped
   end
 
   class Theme
@@ -169,6 +192,13 @@ module Hadar
   end
 
   module Export
+    class PNGSequence
+      MAX_PIXELS: Integer
+
+      def self.write: (Deck deck, String directory, ?renderer: Renderer,
+        ?width: Integer, ?height: Integer) -> Array[String]
+    end
+
     class PDF
       WIDTH: Integer
       HEIGHT: Integer

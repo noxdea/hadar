@@ -15,3 +15,7 @@
 - Add poll-based external Markdown reloads with conflict checks that preserve unsaved local edits.
 - Add a window host that polls external reloads, retains selected-slide position, and renders a next-slide/notes/elapsed-time presenter view.
 - Export the eight slide layouts as searchable PDF pages with embedded TrueType fonts through Okab.
+- Add an in-app rich-text body editor that writes supported edits back through Beid while preserving untouched Markdown bytes.
+- Add slide navigation, fullscreen controls, a Spica-backed fuzzy command palette, and configurable Zaniah keymaps.
+- Export rendered slides as a conflict-safe PNG sequence.
+- Save opened decks from the application with Ctrl/Cmd-S or the command palette.
