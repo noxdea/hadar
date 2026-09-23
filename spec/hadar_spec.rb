@@ -703,6 +703,111 @@ RSpec.describe Hadar do
   end
 
   describe Hadar::Application do
+    it "maps and restores the focused body selection when external text changes before it" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# Slide\n\nKeep target.\n")
+        deck = Hadar::Deck.open(path)
+        backend = Object.new
+        backend.define_singleton_method(:poll) { |timeout:| [] }
+        backend.define_singleton_method(:close) { true }
+        expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
+        app = described_class.new(deck)
+        main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+        app.attach(main_window: main)
+        main.render(app.main_view(width: 640, height: 480), present: false)
+
+        old_editor = app.body_editor
+        old_start = old_editor.text.index("target")
+        old_editor.selection = Zaniah::TextSelection.new(old_start + "target".bytesize, old_start)
+        main.dispatcher.focus(old_editor.focus_handle, origin: :keyboard)
+        iterations = 0
+        main.on_tick do
+          iterations += 1
+          File.write(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
+          main.close if iterations == 4
+        end
+
+        expect { app.run }.not_to raise_error
+        new_editor = app.body_editor
+        new_start = new_editor.text.index("target")
+        expect(new_editor.selection).to eq(Zaniah::TextSelection.new(new_start + "target".bytesize, new_start))
+        expect(main.dispatcher.focused).to equal(new_editor.focus_handle)
+      ensure
+        app&.close
+        main&.close
+      end
+    end
+
+    it "clears body selection and focus when external text changes inside the selection" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# Slide\n\nprefix target suffix\n")
+        deck = Hadar::Deck.open(path)
+        backend = Object.new
+        backend.define_singleton_method(:poll) { |timeout:| [] }
+        backend.define_singleton_method(:close) { true }
+        expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
+        app = described_class.new(deck)
+        main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+        app.attach(main_window: main)
+        main.render(app.main_view(width: 640, height: 480), present: false)
+
+        old_editor = app.body_editor
+        old_start = old_editor.text.index("target")
+        old_editor.selection = Zaniah::TextSelection.new(old_start, old_start + "target".bytesize)
+        main.dispatcher.focus(old_editor.focus_handle, origin: :keyboard)
+        iterations = 0
+        main.on_tick do
+          iterations += 1
+          File.write(path, "# Slide\n\nprefix replaced suffix\n") if iterations == 1
+          main.close if iterations == 4
+        end
+
+        expect { app.run }.not_to raise_error
+        expect(app.body_editor.selection).to eq(Zaniah::TextSelection.new(0))
+        expect(main.dispatcher.focused).to be_nil
+      ensure
+        app&.close
+        main&.close
+      end
+    end
+
+    it "maps a focused caret along unchanged source text after an external edit" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.write(path, "# Slide\n\nKeep target.\n")
+        deck = Hadar::Deck.open(path)
+        backend = Object.new
+        backend.define_singleton_method(:poll) { |timeout:| [] }
+        backend.define_singleton_method(:close) { true }
+        expect(Zaniah::Platform).to receive(:watch).with(deck.source_path, latency: 0.05).and_return(backend)
+        app = described_class.new(deck)
+        main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+        app.attach(main_window: main)
+        main.render(app.main_view(width: 640, height: 480), present: false)
+
+        old_editor = app.body_editor
+        old_caret = old_editor.text.index("target")
+        old_editor.selection = Zaniah::TextSelection.new(old_caret)
+        main.dispatcher.focus(old_editor.focus_handle, origin: :keyboard)
+        iterations = 0
+        main.on_tick do
+          iterations += 1
+          File.write(path, "# Slide\n\nAdded. Keep target.\n") if iterations == 1
+          main.close if iterations == 4
+        end
+
+        expect { app.run }.not_to raise_error
+        new_editor = app.body_editor
+        expect(new_editor.selection).to eq(Zaniah::TextSelection.new(new_editor.text.index("target")))
+        expect(main.dispatcher.focused).to equal(new_editor.focus_handle)
+      ensure
+        app&.close
+        main&.close
+      end
+    end
+
     it "wires polling reload to two headless views and retains the selected slide" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")

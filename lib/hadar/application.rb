@@ -167,7 +167,10 @@ module Hadar
       @running = true
       until @closed || !@running || @windows.all?(&:closed?)
         tick
-        @windows.dup.each { |window| window.tick unless window.closed? }
+        @windows.dup.each do |window|
+          window.tick unless window.closed?
+          restore_reloaded_body_editor_focus(window) if window.equal?(@main_window)
+        end
         sleep(0.016) unless @closed || !@running || @windows.all?(&:closed?)
       end
       self
@@ -280,14 +283,17 @@ module Hadar
       slot = deck.slide(selected_index).slot(:body)
       if slot.empty?
         @body_editor_error = "the body slot is empty"
+        pending_body_editor_focus(:clear) if @pending_body_editor_reload
         return [nil, @body_editor_error]
       end
 
       @body_editor = slot.rich_text
+      restore_body_editor_selection
       [@body_editor, nil]
     rescue Error => error
       @body_editor = nil
       @body_editor_error = error.message
+      pending_body_editor_focus(:clear) if @pending_body_editor_reload
       [nil, @body_editor_error]
     end
 
@@ -303,6 +309,7 @@ module Hadar
           next if @selected_index == index
 
           @selected_index = index
+          @pending_body_editor_reload = nil
           presenter.go_to(index) if presenter.started?
           begin_slide_transition
           request_frames
@@ -350,17 +357,95 @@ module Hadar
     end
 
     def deck_reloaded
+      previous_index = selected_index
+      previous_editor = @body_editor if @body_editor_index == previous_index
+      previous_focus = previous_editor && @main_window&.dispatcher&.focused.equal?(previous_editor.focus_handle)
+      @pending_body_editor_reload = if previous_editor
+        {index: previous_index, text: previous_editor.text, selection: previous_editor.selection,
+         focus: previous_focus ? :pending : :none}
+      end
       @selected_index = if deck.empty?
         nil
       else
         [[selected_index || 0, 0].max, deck.length - 1].min
       end
+      @pending_body_editor_reload = nil if @selected_index != previous_index
       presenter.reconcile!
       @body_editor = nil
       @body_editor_index = nil
       @body_editor_error = nil
       rebuild_slide_list
       request_frames
+    end
+
+    def restore_body_editor_selection
+      pending = @pending_body_editor_reload
+      return unless pending && pending[:index] == selected_index
+
+      selection = remap_text_selection(pending[:text], @body_editor.text, pending[:selection])
+      @body_editor.selection = selection || Zaniah::TextSelection.new(0)
+      pending_body_editor_focus(pending[:focus] == :pending && selection ? :restore :
+        (pending[:focus] == :pending ? :clear : :none))
+    end
+
+    def pending_body_editor_focus(action)
+      @pending_body_editor_reload[:focus] = action if @pending_body_editor_reload
+    end
+
+    def restore_reloaded_body_editor_focus(window)
+      pending = @pending_body_editor_reload
+      return unless pending
+      if pending[:index] != selected_index
+        @pending_body_editor_reload = nil
+        return
+      end
+
+      case pending[:focus]
+      when :restore
+        window.dispatcher.focus(@body_editor&.focus_handle, origin: :programmatic)
+      when :clear
+        window.dispatcher.focus(nil, origin: :programmatic)
+      end
+      @pending_body_editor_reload = nil
+    end
+
+    def remap_text_selection(old_text, new_text, selection)
+      return selection if old_text == new_text
+
+      old_clusters = Zaniah::Unicode.grapheme_clusters(old_text)
+      new_clusters = Zaniah::Unicode.grapheme_clusters(new_text)
+      prefix = 0
+      while prefix < old_clusters.length && prefix < new_clusters.length && old_clusters[prefix] == new_clusters[prefix]
+        prefix += 1
+      end
+      suffix = 0
+      while suffix < old_clusters.length - prefix && suffix < new_clusters.length - prefix &&
+          old_clusters[old_clusters.length - suffix - 1] == new_clusters[new_clusters.length - suffix - 1]
+        suffix += 1
+      end
+
+      old_prefix_end = old_clusters.take(prefix).join.bytesize
+      old_suffix_start = old_clusters.take(old_clusters.length - suffix).join.bytesize
+      new_suffix_start = new_clusters.take(new_clusters.length - suffix).join.bytesize
+      range = selection.range
+
+      if selection.collapsed?
+        position = selection.head
+        return Zaniah::TextSelection.new(position) if position < old_prefix_end
+        return Zaniah::TextSelection.new(position + new_suffix_start - old_suffix_start) if position > old_suffix_start
+        return if old_prefix_end == old_suffix_start
+        return Zaniah::TextSelection.new(position) if position == old_prefix_end
+        return Zaniah::TextSelection.new(position + new_suffix_start - old_suffix_start) if position == old_suffix_start
+
+        return
+      end
+
+      if range.end <= old_prefix_end
+        selection
+      elsif range.begin >= old_suffix_start
+        delta = new_suffix_start - old_suffix_start
+        Zaniah::TextSelection.new(selection.anchor + delta, selection.head + delta)
+      end
     end
 
     def request_frames

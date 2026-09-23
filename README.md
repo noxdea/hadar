@@ -123,9 +123,12 @@ app.run
 `Application#run` polls the deck and ticks both attached windows in one loop, so
 the preview and presenter stay live together. The host supplies the windows;
 Hadar does not position them on separate displays. The body editor is backed by
-the current Markdown source and is recreated after an external reload, so reload
-retains slide selection but not an in-progress caret or text selection. Arrow,
-Page Up/Down, Home, and End navigate slides; `P` or `F5` starts presentation,
+the current Markdown source and is recreated after an external reload. It keeps
+the caret or selection (and editor focus) when its text is unchanged or the
+selected text maps unambiguously around one contiguous external edit; if an edit
+overlaps the selection or makes the mapping ambiguous, the selection and focus
+are cleared rather than moved to unrelated text. Arrow, Page Up/Down, Home, and
+End navigate slides; `P` or `F5` starts presentation,
 `F11` toggles fullscreen, and `Escape` exits presentation or fullscreen.
 `Ctrl/Cmd-K` opens the fuzzy command palette; `Ctrl/Cmd-S` saves an opened deck
 through its conflict-aware atomic writer.
