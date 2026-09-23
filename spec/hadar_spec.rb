@@ -745,5 +745,76 @@ RSpec.describe Hadar do
 
       expect { app.run }.to raise_error(Hadar::Error, /attach at least one window/)
     end
+
+    it "navigates slides from window keys without resetting presentation time" do
+      now = 10.0
+      deck = Hadar::Deck.parse("# One\n\n---\n\n# Two\n\n---\n\n# Three\n")
+      app = described_class.new(deck, clock: -> { now }, watch: false)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      app.attach(main_window: main)
+      app.start_presentation
+      now = 15.0
+
+      main.input(Zaniah::Input::KeyDown.new("right", false))
+      expect(app.selected_index).to eq(1)
+      expect(app.presenter.current_index).to eq(1)
+      expect(app.presenter.elapsed_seconds).to eq(5.0)
+
+      main.input(Zaniah::Input::KeyDown.new("home", false))
+      expect(app.presenter.current_index).to eq(0)
+      main.input(Zaniah::Input::KeyDown.new("end", false))
+      expect(app.presenter.current_index).to eq(2)
+      expect(app.next_slide).to be_nil
+    ensure
+      app&.close
+      main&.close
+    end
+
+    it "toggles native fullscreen on the active window and exits on Escape" do
+      app = described_class.new(Hadar::Deck.parse("# One\n"), watch: false)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      presenter = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360)
+      toggles = 0
+      presenter.define_singleton_method(:toggle_fullscreen) { toggles += 1 }
+      app.attach(main_window: main, presenter_window: presenter)
+      app.start_presentation
+
+      main.input(Zaniah::Input::KeyDown.new("f11", false))
+      expect(app.fullscreen?(window: :presenter)).to be(true)
+      expect(toggles).to eq(1)
+
+      main.input(Zaniah::Input::KeyDown.new("esc", false))
+      expect(app.presenter.started?).to be(false)
+      expect(app.fullscreen?(window: :presenter)).to be(false)
+      expect(toggles).to eq(2)
+    ensure
+      app&.close
+      main&.close
+      presenter&.close
+    end
+
+    it "uses Zaniah transitions when the visible slide changes" do
+      now = 0.0
+      deck = Hadar::Deck.parse("# One\n\n---\n\n# Two\n")
+      app = described_class.new(deck, watch: false)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 480, height: 360, clock: -> { now })
+      app.attach(main_window: main)
+      main.tick
+
+      app.select_slide(1)
+      main.tick
+      transition = [:transition, [:hadar_slide_transition, :main, 1], :opacity]
+      expect(main.animator.animating?(transition)).to be(false)
+      expect(main.dirty?).to be(true)
+      main.tick
+      expect(main.animator.animating?(transition)).to be(true)
+
+      now = 1.0
+      main.tick
+      expect(main.animator.animating?(transition)).to be(false)
+    ensure
+      app&.close
+      main&.close
+    end
   end
 end

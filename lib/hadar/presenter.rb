@@ -20,6 +20,12 @@ module Hadar
       self
     end
 
+    def go_to(index)
+      validate_index!(index)
+      @current_index = index
+      self
+    end
+
     def stop
       @started_at = nil
       self

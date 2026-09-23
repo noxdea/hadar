@@ -12,6 +12,10 @@ module Hadar
       @selected_index = deck.empty? ? nil : 0
       @presenter = Presenter.new(deck, renderer: renderer, clock: clock)
       @windows = []
+      @main_window = @presenter_window = nil
+      @fullscreen = {main: false, presenter: false}
+      @transition_generation = {main: 0, presenter: 0}
+      @transition_initial_frame = {main: false, presenter: false}
       @closed = false
       @running = false
       rebuild_slide_list
@@ -19,8 +23,14 @@ module Hadar
     end
 
     def attach(main_window:, presenter_window: nil)
-      attach_window(main_window) { |window| main_view(width: window.content_size.width, height: window.content_size.height) }
-      attach_window(presenter_window) { |_window| presenter.presenter_view } if presenter_window
+      @main_window = main_window
+      @presenter_window = presenter_window
+      attach_window(main_window) do |window|
+        main_view(width: window.content_size.width, height: window.content_size.height)
+      end
+      attach_window(presenter_window) do |_window|
+        transition_view(presenter.presenter_view, :presenter)
+      end if presenter_window
       self
     end
 
@@ -35,7 +45,7 @@ module Hadar
       sidebar_width = [Float(width) * 0.24, 240.0].min
       Zaniah::Div.new.flex_row.w(width).h(height)
         .child(slide_list.build(width: sidebar_width, height: height))
-        .child(Zaniah::Div.new.flex_1.child(preview))
+        .child(Zaniah::Div.new.flex_1.child(transition_view(preview, :main)))
     end
 
     def select_slide(index)
@@ -46,14 +56,49 @@ module Hadar
       slide
     end
 
+    def next_slide
+      navigate_to(selected_index + 1) if selected_index && selected_index + 1 < deck.length
+    end
+
+    def previous_slide
+      navigate_to(selected_index - 1) if selected_index && selected_index.positive?
+    end
+
+    def first_slide
+      navigate_to(0) unless deck.empty?
+    end
+
+    def last_slide
+      navigate_to(deck.length - 1) unless deck.empty?
+    end
+
+    def toggle_fullscreen(window: :presenter)
+      target = window_for(window)
+      raise Error, "#{window} window backend does not support fullscreen" unless target.respond_to?(:toggle_fullscreen)
+
+      target.toggle_fullscreen
+      @fullscreen[window] = !@fullscreen.fetch(window)
+    end
+
+    def fullscreen?(window: :presenter)
+      window_for(window)
+      @fullscreen.fetch(window)
+    end
+
     def start_presentation(index: selected_index)
       presenter.start(index: index)
+      if selected_index == index
+        begin_slide_transition
+      else
+        slide_list.select(index)
+      end
       request_frames
       presenter
     end
 
     def stop_presentation
       presenter.stop
+      begin_slide_transition
       request_frames
       presenter
     end
@@ -103,15 +148,82 @@ module Hadar
       window.on_input { |event| handle_input(event, window) }
     end
 
-    def handle_input(event, _window)
-      return unless event.is_a?(Zaniah::Input::KeyDown)
+    def handle_input(event, window)
+      return unless event.is_a?(Zaniah::Input::KeyDown) && !event.is_held
 
-      # Navigation bindings are added with the presentation controls milestone.
+      key = Zaniah::Input::Keystroke.normalize(event.keystroke)
+      target = window.equal?(@presenter_window) ? :presenter : :main
+      case key
+      when "right", "pagedown", "space"
+        next_slide
+      when "left", "pageup"
+        previous_slide
+      when "home"
+        first_slide
+      when "end"
+        last_slide
+      when "p", "f5"
+        presenter.started? ? stop_presentation : start_presentation
+      when "f11"
+        fullscreen_window = target == :main && presenter.started? && @presenter_window ? :presenter : target
+        toggle_fullscreen(window: fullscreen_window)
+      when "esc"
+        stop_presentation if presenter.started?
+        fullscreen_window = @presenter_window && @fullscreen[:presenter] ? :presenter : target
+        toggle_fullscreen(window: fullscreen_window) if fullscreen?(window: fullscreen_window)
+      end
     end
 
     def rebuild_slide_list
       @slide_list = SlideList.new(deck, renderer: renderer, selected: selected_index,
-        on_select: ->(_slide, index) { @selected_index = index })
+        on_select: ->(_slide, index) do
+          next if @selected_index == index
+
+          @selected_index = index
+          presenter.go_to(index) if presenter.started?
+          begin_slide_transition
+          request_frames
+        end)
+    end
+
+    def navigate_to(index)
+      unless index.is_a?(Integer) && (0...deck.length).cover?(index)
+        raise IndexError, "slide index is outside the deck"
+      end
+      return deck.slide(index) if index == selected_index
+
+      slide_list.select(index)
+    end
+
+    def begin_slide_transition
+      @transition_generation.each_key do |surface|
+        next if surface == :presenter && !@presenter_window
+
+        @transition_generation[surface] += 1
+        @transition_initial_frame[surface] = true
+      end
+    end
+
+    def transition_view(element, surface)
+      initial_frame = @transition_initial_frame.fetch(surface)
+      @transition_initial_frame[surface] = false if initial_frame
+      request_frames if initial_frame
+
+      Zaniah::Div.new.key([:hadar_slide_transition, surface, @transition_generation.fetch(surface)])
+        .w_full.h_full.opacity(initial_frame ? 0.0 : 1.0)
+        .transition(:opacity, duration: 0.24, easing: :ease_out)
+        .child(element)
+    end
+
+    def window_for(name)
+      target = case name
+      when :main then @main_window
+      when :presenter then @presenter_window
+      else raise ArgumentError, "window must be :main or :presenter"
+      end
+      raise Error, "#{name} window is not attached" unless target
+
+      target
     end
 
     def deck_reloaded
