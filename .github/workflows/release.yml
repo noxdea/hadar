@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Verify tag and version
+        run: test "${GITHUB_REF_NAME}" = "v$(bundle exec ruby -Ilib -rhadar/version -e 'print Hadar::VERSION')"
+      - name: Test and build
+        run: |
+          bundle exec rake
+          bundle exec rbs -I sig -r beid -r kochab -r zaniah validate
+          gem build --strict hadar.gemspec --output /tmp/hadar.gem
+      - name: Check published version
+        id: gem
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if gem info hadar --remote --version "$version" | grep -q .; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gem.outputs.published != 'true'
+        uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## $version" '
+            $0 == heading || index($0, heading " ") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi

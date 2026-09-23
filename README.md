@@ -23,7 +23,8 @@ Missing, unreadable, and unsupported images fail preview construction with a
 saving continues to write only the Markdown source. Its window host polls for
 external Markdown edits and can show a next-slide, notes, and elapsed-time
 presenter view. The host supports slide navigation, fullscreen, a fuzzy command
-palette, and PNG-sequence export. It does not place windows on separate displays.
+palette, and PNG-sequence export. When a secondary display is available, the
+owned presenter window opens there fullscreen.
 
 ## Installation
 
@@ -225,7 +226,7 @@ in live thumbnails; it encodes raster frames for export workflows.
 Run the specs with `bundle exec rake`. Check the 100-slide virtual-list
 layout/scene-build budget with `BUDGET=1 bundle exec ruby bench/slide_list.rb`;
 the headless benchmark skips software pixel rasterization. Hadar depends on
-Beid, Antares, Kochab, Okab, Spica, and Zaniah; its declarative `Describe`,
+Beid, Antares, Kochab, Okab, Spica, Xamidimura, and Zaniah; its declarative `Describe`,
 `UniformList`, and input keymap APIs are reused directly.
 
 ## License
