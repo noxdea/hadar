@@ -108,7 +108,7 @@ module Hadar
       case node.type
       when :text, :code_span then node.attributes.fetch(:text, "")
       when :image then node.attributes.fetch(:label, "")
-      when :break then "\n"
+      when :break, :softbreak then "\n"
       when :task_checkbox then ""
       when :code_block then code_block_text(node)
       when :html_block then node.attributes.fetch(:text, "")
@@ -132,7 +132,7 @@ module Hadar
       else
         "• "
       end
-      marker + node.children.map { |child| plain_text(child) }.join
+      marker + node.children.map { |child| plain_text(child) }.reject(&:empty?).join("\n")
     end
 
     def code_block_text(node)

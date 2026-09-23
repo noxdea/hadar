@@ -79,8 +79,11 @@ a Zaniah rich-text editor whose bold, italic, link, and code spans come from the
 Markdown source. Text edits are written back through Beid immediately when they
 stay within one source-backed text run, preserving all other source bytes and
 existing markers. Bold and italic may be added to one source-backed run; removal
-is supported for a simple complete bold/italic text run. Edits crossing Markdown
-structure, using non-Markdown styles (such as color or font size), or using
+is supported for a simple complete bold/italic text run. Existing bullet and
+numbered list items can be indented or outdented one level at a time through
+`RichText#paragraph_style(..., level:)`; edits preserve the original list marker
+and reject changes that would reparent neighboring items. Edits crossing Markdown
+structure, using non-Markdown styles (such as color or font size), or using other
 paragraph styles are rejected rather than flattening or normalizing markup.
 Rich-text projection covers headings, paragraphs, block quotes, and text lists;
 tables, fenced code blocks, and Markdown strikethrough are not editable through

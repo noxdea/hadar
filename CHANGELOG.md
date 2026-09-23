@@ -21,3 +21,4 @@
 - Save opened decks from the application with Ctrl/Cmd-S or the command palette.
 - Add an in-app chooser for all layout slots, with source-preserving image insert/replace, table-cell editing, and fenced-code editing.
 - Preserve a rich-text caret or selection across external Markdown reloads when it maps to unchanged source; clear it when mapping would be ambiguous.
+- Support source-preserving one-level indent and outdent edits for existing bullet and numbered list items.
