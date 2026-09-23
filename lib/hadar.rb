@@ -27,3 +27,4 @@ module Hadar
 end
 
 require_relative "hadar/export/pdf"
+require_relative "hadar/export/png_sequence"
