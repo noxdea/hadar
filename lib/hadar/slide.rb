@@ -4,15 +4,17 @@ module Hadar
   class Slide
     attr_reader :index, :document, :nodes, :layout, :slots, :theme
 
-    def initialize(index:, document:, nodes:, layout: nil, theme:)
-      @index, @document, @nodes, @theme = index, document, nodes.freeze, theme
+    def initialize(index:, document:, nodes:, layout: nil, theme:, deck:)
+      @index, @document, @nodes, @theme, @deck = index, document, nodes.freeze, theme, deck
       @layout = Layout.select(content_nodes, requested: layout)
       @slots = build_slots.freeze
       freeze
     end
 
     def slot(name)
-      slots.fetch(name.to_sym) { Slot.new(name: name, nodes: [], document: document) }
+      slots.fetch(name.to_sym) do
+        Slot.new(name: name, nodes: [], document: document, deck: @deck, slide_index: index)
+      end
     end
 
     def title = slot(:title).text
@@ -59,7 +61,8 @@ module Hadar
         mapping[:code] = content.select { |node| node.type == :code_block }
       end
       mapping.to_h do |name, entries|
-        [name, Slot.new(name: name, nodes: entries, document: document)]
+        [name, Slot.new(name: name, nodes: entries, document: document,
+          deck: @deck, slide_index: index)]
       end
     end
 

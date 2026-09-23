@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+
 RSpec.describe Hadar do
   def slide(markdown)
     Hadar::Deck.parse(markdown).slide(0)
@@ -67,6 +69,89 @@ RSpec.describe Hadar do
 
       expect(list.slot(:body).text).to eq("• first\n• second")
       expect(code.slot(:code).text).to eq("puts :ok\n")
+    end
+
+    it "replaces a slot through Beid and atomically saves only the selected source range" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        original = <<~'MARKDOWN'
+          ---
+          theme: dark
+          ---
+          # **Keep _this_ title**
+
+          ---
+
+          <!-- layout: title+body -->
+          # **Old title**
+
+          Use *markers* and `code` here.
+
+          - keep this list marker
+
+          ---
+
+          # Finish
+        MARKDOWN
+        original = original.gsub("\n", "\r\n")
+        expected = original.sub("# **Old title**", "# Revised title")
+        File.binwrite(path, original)
+        File.chmod(0o640, path)
+        deck = Hadar::Deck.open(path)
+        previous_slot = deck.slide(1).slot(:title)
+
+        current_slot = previous_slot.replace_text("Revised title")
+        expect(deck.document.source).to eq(expected)
+        expect(current_slot.text).to eq("Revised title")
+        expect { previous_slot.replace_text("stale") }
+          .to raise_error(Hadar::Error, /stale/)
+
+        expect(deck.save).to equal(deck)
+        expect(File.binread(path)).to eq(expected.b)
+        expect(File.stat(path).mode & 0o777).to eq(0o640)
+        expect(Dir.children(directory)).to eq(["deck.md"])
+      end
+    end
+
+    it "refuses to overwrite a file changed outside Hadar" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        File.binwrite(path, "# Original\n")
+        deck = Hadar::Deck.open(path)
+        deck.slide(0).slot(:title).replace_text("Hadar edit")
+        File.binwrite(path, "# External edit\n")
+
+        expect { deck.save }.to raise_error(Hadar::Error, /changed since it was opened/)
+        expect(File.binread(path)).to eq("# External edit\n")
+      end
+    end
+
+    it "rejects ambiguous multi-node slots without changing the document" do
+      deck = described_class.parse("# Title\n\nFirst paragraph.\n\nSecond paragraph.\n")
+      original = deck.document.source
+
+      expect { deck.slide(0).slot(:body).replace_text("replacement") }
+        .to raise_error(ArgumentError, /exactly one node/)
+      expect(deck.document.source).to equal(original)
+    end
+
+    it "requires explicit overwrite when saving a parsed deck over an existing file" do
+      Dir.mktmpdir do |directory|
+        path = File.join(directory, "deck.md")
+        new_path = File.join(directory, "new-deck.md")
+        File.binwrite(path, "# Existing\n")
+        deck = described_class.parse("# New\n")
+
+        expect { deck.save(path) }.to raise_error(Hadar::Error, /overwrite: true/)
+        expect(File.binread(path)).to eq("# Existing\n")
+        deck.save(path, overwrite: true)
+        expect(File.binread(path)).to eq("# New\n")
+
+        created = described_class.parse("# Created\n")
+        created.slide(0).slot(:title).replace_text("Created safely")
+        created.save(new_path)
+        expect(File.binread(new_path)).to eq("# Created safely\n")
+      end
     end
   end
 

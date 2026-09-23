@@ -55,6 +55,20 @@ Built-in themes are `minimal`, `dark`, and `warm`. Custom JSONC themes can be
 loaded with `Hadar::Theme.load(path)` and passed to `Deck.parse` or
 `Deck.open`.
 
+Slots remain projections of the current Beid document. Replacing a single
+node's text applies a Beid edit and returns the refreshed slot; old slots are
+stale snapshots. Opened decks save atomically, preserve file permissions, and
+refuse to overwrite external changes:
+
+```ruby
+deck = Hadar::Deck.open("slides.md")
+deck.slide(0).slot(:title).replace_text("Revised title")
+deck.save
+```
+
+For a deck created with `Deck.parse`, pass a new path to `save`. Replacing an
+existing unrelated path requires `overwrite: true`.
+
 ## Layouts
 
 `title`, `title+body`, `two-column`, `image+text`, `full-bleed-image`,

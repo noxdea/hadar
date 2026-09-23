@@ -20,11 +20,15 @@ module Hadar
     attr_reader name: Symbol
     attr_reader nodes: Array[Beid::Node]
     attr_reader document: Beid::Document
+    attr_reader slide_index: Integer
 
-    def initialize: (name: String | Symbol, nodes: Array[Beid::Node], document: Beid::Document) -> void
+    def initialize: (name: String | Symbol, nodes: Array[Beid::Node], document: Beid::Document,
+      deck: Deck, slide_index: Integer) -> void
     def empty?: () -> bool
     def markdown: () -> String
     def text: () -> String
+    def replace_text: (String text) -> Slot
+    def owned_by?: (Deck deck) -> bool
   end
 
   class Slide
@@ -35,6 +39,8 @@ module Hadar
     attr_reader slots: Hash[Symbol, Slot]
     attr_reader theme: Theme
 
+    def initialize: (index: Integer, document: Beid::Document, nodes: Array[Beid::Node],
+      ?layout: String | Symbol | nil, theme: Theme, deck: Deck) -> void
     def slot: (String | Symbol name) -> Slot
     def title: () -> String
   end
@@ -43,11 +49,16 @@ module Hadar
     attr_reader document: Beid::Document
     attr_reader slides: Array[Slide]
     attr_reader theme: Theme
+    attr_reader source_path: String?
 
+    def initialize: (Beid::Document document, ?theme: Theme | String | nil,
+      ?source_path: String?) -> void
     def self.parse: (String markdown, ?theme: Theme | String | nil) -> Deck
     def self.open: (String path, ?theme: Theme | String | nil) -> Deck
     def self.from_document: (Beid::Document document, ?theme: Theme | String | nil) -> Deck
     def slide: (Integer index) -> Slide
+    def replace_text: (Slot slot, String text) -> Slot
+    def save: (?String path, ?overwrite: bool) -> Deck
     def length: () -> Integer
     alias size length
     def empty?: () -> bool

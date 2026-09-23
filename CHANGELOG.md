@@ -6,3 +6,4 @@
 - Add eight standard layout definitions with directive-based and inferred selection.
 - Add validated JSONC theme loading and three bundled themes.
 - Add a text-only slide preview tree using Zaniah's declarative `Describe` API.
+- Add Beid-backed slot text replacement and atomic, conflict-aware deck saving.

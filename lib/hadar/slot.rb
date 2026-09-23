@@ -2,12 +2,13 @@
 
 module Hadar
   class Slot
-    attr_reader :name, :nodes, :document
+    attr_reader :name, :nodes, :document, :slide_index
 
-    def initialize(name:, nodes:, document:)
+    def initialize(name:, nodes:, document:, deck:, slide_index:)
       @name = name.to_sym
       @nodes = nodes.freeze
       @document = document
+      @deck, @slide_index = deck, slide_index
       freeze
     end
 
@@ -20,6 +21,12 @@ module Hadar
     def text
       nodes.map { |node| plain_text(node) }.reject(&:empty?).join("\n")
     end
+
+    def replace_text(text)
+      @deck.replace_text(self, text)
+    end
+
+    def owned_by?(deck) = @deck.equal?(deck)
 
     private
 
