@@ -88,7 +88,7 @@ RSpec.describe Hadar do
         deck.slide(0).slot(:title).replace_text("Launch sequence")
         deck.save
 
-        expect(File.binread(path)).to eq(original.sub("# Launch plan\n", "# Launch sequence\n").b)
+        expect(File.binread(path)).to eq(original.sub("# Launch plan", "# Launch sequence"))
         expect(File.binread(path)).to include(notes)
       end
     end
@@ -264,7 +264,7 @@ RSpec.describe Hadar do
 
         expect(deck.save).to equal(deck)
         expect(File.binread(path)).to eq(expected.b)
-        expect(File.stat(path).mode & 0o777).to eq(0o640)
+        expect(File.stat(path).mode & 0o777).to eq(0o640) unless Gem.win_platform?
         expect(Dir.children(directory)).to eq(["deck.md"])
       end
     end
