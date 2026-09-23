@@ -120,15 +120,18 @@ window tick requests a fresh frame so elapsed time stays current:
 ```ruby
 app = Hadar::Application.new(deck)
 main = Zaniah::Platform.open_window(title: "Hadar")
-presenter = Zaniah::Platform.open_window(title: "Hadar Presenter")
-app.attach(main_window: main, presenter_window: presenter)
+app.attach(main_window: main)
 app.run
 ```
 
-`Application#run` polls the deck and ticks both attached windows in one loop, so
-the preview and presenter stay live together. The host supplies the windows;
-Hadar does not position them on separate displays. Rich-text slot editors are
-backed by the current Markdown source and recreated after an external reload.
+`Application#run` polls the deck and ticks all attached windows in one loop.
+When at least two displays are available, Hadar creates its own presenter
+window and places it fullscreen on a secondary display (Wayland compositors may
+choose whether to honor the output request). With one display, it does not
+create a presenter automatically. A presenter window passed by the host is
+used as-is and is never moved or closed by Hadar. The automatically created
+presenter closes when the main window closes. Rich-text slot editors are backed
+by the current Markdown source and recreated after an external reload.
 They keep the caret or selection (and editor focus) when selected text maps
 unambiguously around one contiguous external edit; if an edit overlaps the
 selection or makes the mapping ambiguous, the selection and focus are cleared

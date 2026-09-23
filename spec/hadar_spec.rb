@@ -703,6 +703,80 @@ RSpec.describe Hadar do
   end
 
   describe Hadar::Application do
+    describe ".presenter_display" do
+      let(:primary) do
+        Zaniah::Platform::Display.new(1, "Primary", Zaniah::Bounds.new(0, 0, 800, 600), 1, true)
+      end
+      let(:secondary) do
+        Zaniah::Platform::Display.new(2, "Secondary", Zaniah::Bounds.new(800, 0, 800, 600), 1, false)
+      end
+
+      it "selects a non-primary display and returns nil when no second display exists" do
+        expect(described_class.presenter_display([primary, secondary])).to equal(secondary)
+        expect(described_class.presenter_display([primary])).to be_nil
+      end
+
+      it "falls back to the second display when the backend reports no primary" do
+        another = Zaniah::Platform::Display.new(3, "Another", Zaniah::Bounds.new(1600, 0, 800, 600), 1, false)
+
+        expect(described_class.presenter_display([secondary, another])).to equal(another)
+      end
+
+      it "rejects display lists containing values from another API" do
+        expect { described_class.presenter_display([Object.new]) }.to raise_error(TypeError, /Zaniah::Platform::Display/)
+      end
+    end
+
+    it "creates and places an owned presenter window on the selected secondary display" do
+      app = described_class.new(Hadar::Deck.parse("# Slide\n"), watch: false)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+      presenter = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+      primary = Zaniah::Platform::Display.new(1, "Primary", Zaniah::Bounds.new(0, 0, 800, 600), 1, true)
+      secondary = Zaniah::Platform::Display.new(2, "Secondary", Zaniah::Bounds.new(800, 0, 800, 600), 1, false)
+      main.define_singleton_method(:displays) { [primary, secondary] }
+      moved_to = nil
+      fullscreen_toggles = 0
+      presenter.define_singleton_method(:move_to_display) { |display| moved_to = display; true }
+      presenter.define_singleton_method(:toggle_fullscreen) { fullscreen_toggles += 1 }
+      expect(Zaniah::Platform).to receive(:open_window).with(
+        backend: :headless, width: 640, height: 480, scale_factor: 1, title: "Hadar Presenter"
+      ).and_return(presenter)
+
+      app.attach(main_window: main)
+
+      expect(moved_to).to equal(secondary)
+      expect(fullscreen_toggles).to eq(1)
+      expect(app.fullscreen?(window: :presenter)).to be(true)
+
+      main.on_tick { main.close }
+      app.run
+
+      expect(presenter.closed?).to be(true)
+    ensure
+      app&.close
+      main&.close
+      presenter&.close
+    end
+
+    it "leaves caller-provided windows untouched and caller-owned" do
+      app = described_class.new(Hadar::Deck.parse("# Slide\n"), watch: false)
+      main = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+      presenter = Zaniah::Platform.open_window(backend: :headless, width: 640, height: 480)
+      expect(main).not_to receive(:displays)
+      expect(presenter).not_to receive(:move_to_display)
+      expect(Zaniah::Platform).not_to receive(:open_window)
+
+      app.attach(main_window: main, presenter_window: presenter)
+      app.close
+
+      expect(main.closed?).to be(false)
+      expect(presenter.closed?).to be(false)
+    ensure
+      app&.close
+      main&.close
+      presenter&.close
+    end
+
     it "maps and restores the focused body selection when external text changes before it" do
       Dir.mktmpdir do |directory|
         path = File.join(directory, "deck.md")

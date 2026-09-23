@@ -4,6 +4,17 @@ module Hadar
   class Application
     attr_reader :deck, :renderer, :presenter, :selected_index, :selected_slot_name, :slide_list, :keymap, :body_editor
 
+    def self.presenter_display(displays)
+      unless displays.is_a?(Array) && displays.all? { |display| display.is_a?(Zaniah::Platform::Display) }
+        raise TypeError, "displays must be an Array of Zaniah::Platform::Display values"
+      end
+      return if displays.length < 2
+
+      return displays[1] unless displays.any?(&:primary)
+
+      displays.find { |display| !display.primary } || displays[1]
+    end
+
     def self.default_keymap(clock: Zaniah::MONOTONIC_CLOCK)
       Zaniah::Input::Keymap.new(clock: clock)
         .bind("right", :next_slide, context: "!in_text_field")
@@ -37,6 +48,7 @@ module Hadar
       @presenter = Presenter.new(deck, renderer: renderer, clock: clock)
       @windows = []
       @main_window = @presenter_window = nil
+      @owned_presenter_window = nil
       @fullscreen = {main: false, presenter: false}
       @transition_generation = {main: 0, presenter: 0}
       @transition_initial_frame = {main: false, presenter: false}
@@ -55,10 +67,14 @@ module Hadar
 
     def attach(main_window:, presenter_window: nil)
       @main_window = main_window
-      @presenter_window = presenter_window
       attach_window(main_window) do |window|
         main_view(width: window.content_size.width, height: window.content_size.height)
       end
+      unless presenter_window
+        presenter_window = automatic_presenter_window(main_window)
+        @owned_presenter_window = presenter_window
+      end
+      @presenter_window = presenter_window
       attach_window(presenter_window) do |_window|
         transition_view(presenter.presenter_view, :presenter)
       end if presenter_window
@@ -236,6 +252,7 @@ module Hadar
         tick
         @windows.dup.each do |window|
           window.tick unless window.closed?
+          close_owned_presenter_window if window.equal?(@main_window) && window.closed?
           restore_reloaded_body_editor_focus(window) if window.equal?(@main_window)
         end
         sleep(0.016) unless @closed || !@running || @windows.all?(&:closed?)
@@ -249,6 +266,7 @@ module Hadar
     def close
       @closed = true
       @watcher&.close
+      close_owned_presenter_window
       @windows.clear
       self
     end
@@ -259,6 +277,53 @@ module Hadar
     end
 
     private
+
+    def automatic_presenter_window(main_window)
+      return unless main_window.respond_to?(:displays)
+
+      display = self.class.presenter_display(main_window.displays)
+      return unless display
+
+      backend, options = presenter_backend(main_window)
+      return unless backend
+
+      window = Zaniah::Platform.open_window(backend: backend, **options,
+        width: main_window.content_size.width, height: main_window.content_size.height,
+        scale_factor: main_window.scale_factor, title: "Hadar Presenter")
+      if window.respond_to?(:fullscreen_on)
+        raise Error, "could not place the presenter window on the secondary display" unless window.fullscreen_on(display)
+        @fullscreen[:presenter] = true
+      else
+        raise Error, "could not place the presenter window on the secondary display" unless window.move_to_display(display)
+        if window.respond_to?(:toggle_fullscreen)
+          window.toggle_fullscreen
+          @fullscreen[:presenter] = true
+        end
+      end
+      window
+    rescue StandardError
+      window&.close unless window&.closed?
+      raise
+    end
+
+    def presenter_backend(window)
+      ancestors = window.class.ancestors.filter_map(&:name)
+      return [:mac, {}] if ancestors.include?("Zaniah::Platform::Mac::Window")
+      return [:linux, {display_server: :wayland}] if ancestors.include?("Zaniah::Platform::Linux::WaylandWindow")
+      return [:linux, {display_server: :x11}] if ancestors.include?("Zaniah::Platform::Linux::Window")
+      return [:windows, {}] if ancestors.include?("Zaniah::Platform::Windows::Window")
+      return [:headless, {}] if ancestors.include?("Zaniah::Platform::Headless::Window")
+
+      [nil, {}]
+    end
+
+    def close_owned_presenter_window
+      window = @owned_presenter_window
+      return unless window
+
+      @owned_presenter_window = nil
+      window.close unless window.closed?
+    end
 
     def attach_window(window, &draw)
       raise TypeError, "window must support drawing, input, ticking, closing, and frame requests" unless

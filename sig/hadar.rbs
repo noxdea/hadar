@@ -123,6 +123,7 @@ module Hadar
     attr_reader keymap: Zaniah::Input::Keymap
     attr_reader body_editor: Zaniah::UI::RichText?
 
+    def self.presenter_display: (Array[Zaniah::Platform::Display]) -> Zaniah::Platform::Display?
     def self.default_keymap: (?clock: ^() -> Numeric) -> Zaniah::Input::Keymap
     def initialize: (Deck deck, ?renderer: Renderer, ?clock: ^() -> Numeric, ?watch: bool,
       ?keymap: Zaniah::Input::Keymap) -> void
