@@ -1,38 +1,57 @@
-# Hadar
+<h1 align="center">Hadar</h1>
 
-Hadar (β Centauri) is a Markdown-backed presentation app. Its deck model is a
-projection of Beid's source-positioned AST: slide content and slots keep their
-source nodes instead of becoming a second mutable copy. Markdown `---`
-thematic breaks separate slides, and `<!-- layout: ... -->` selects one of
-eight template layouts.
+<p align="center">
+  <strong>Markdown-backed slide decks with source-preserving editing, live preview, and presentation export</strong>
+</p>
 
-Hadar provides deck/slide/slot parsing, three JSONC themes, layout selection, a
-declarative preview tree, and virtualized thumbnail rows built with Zaniah's
-existing `Describe` and `UniformList` APIs. Its selected-slide editor can switch
-among every declared layout slot. Text slots use Zaniah `RichText` and Beid;
-image slots provide insert/replace actions, while tables and fenced code expose
-source-preserving cell/body editors. Unsupported syntax remains visible but
-read-only. Beid-backed
-`<!-- notes: ... -->` comments provide speaker notes on each slide and are
-excluded from the visible preview. Image slots can insert and replace
-source-backed Markdown references; absolute asset paths are stored relative to
-the opened deck. Local image slots render through Zaniah's image decoder (PNG,
-GIF, and baseline JPEG); relative references resolve from the deck's directory.
-Missing, unreadable, and unsupported images fail preview construction with a
-`Hadar::Error`. Remote URLs are not fetched. Hadar does not copy image files;
-saving continues to write only the Markdown source. Its window host polls for
-external Markdown edits and can show a next-slide, notes, and elapsed-time
-presenter view. The host supports slide navigation, fullscreen, a fuzzy command
-palette, PNG-sequence, and APNG export. When a secondary display is available,
-the owned presenter window opens there fullscreen.
+<p align="center">
+  <a href="https://rubygems.org/gems/hadar"><img src="https://img.shields.io/gem/v/hadar.svg" alt="Gem version"></a>
+  <a href="https://github.com/noxdea/hadar/actions/workflows/main.yml"><img src="https://github.com/noxdea/hadar/actions/workflows/main.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/CRuby-%3E%3D%203.2-cc342d.svg" alt="CRuby 3.2 or newer">
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#editing-and-presenting">Editing and presenting</a> ·
+  <a href="#export">Export</a>
+</p>
+
+---
+
+Hadar is a Ruby presentation library built around ordinary Markdown files.
+[Beid](https://github.com/noxdea/beid) keeps the source-positioned document as
+the only editable copy; Hadar projects it into slides, slots, and a live
+[Zaniah](https://github.com/noxdea/zaniah) preview. Use its API to embed a
+presentation window in an app or export a deck without a GUI.
+
+## Features
+
+- Eight automatic or explicitly selected slide templates, plus opt-in freeform placement
+- Source-backed text, image, table-cell, and fenced-code editing with speaker notes
+- Three built-in JSONC themes (`minimal`, `dark`, `warm`) and custom themes
+- Virtualized slide thumbnails, keyboard navigation, command palette, and a secondary-display presenter view
+- Searchable PDF, PNG-sequence, and animated PNG (APNG) export
 
 ## Installation
 
-```ruby
-gem "hadar"
+Hadar requires CRuby 3.2 or newer. Install the gem or add `gem "hadar"` to
+your Gemfile:
+
+```sh
+gem install hadar
 ```
 
-## Usage
+Hadar is a library; it does not install a `hadar` command. Windowed use
+requires a Zaniah-supported display backend. PNG and APNG export use Zaniah's
+headless renderer.
+
+## Quick start
+
+Separate slides with Markdown thematic breaks. Hadar selects a layout from
+each slide's content unless you add a `layout` comment:
 
 ```ruby
 require "hadar"
@@ -59,21 +78,16 @@ deck = Hadar::Deck.parse(<<~MARKDOWN)
   :::
 MARKDOWN
 
-deck.slide(1).layout         # => :two_column
-deck.slide(1).slot(:left).text
-deck.slide(0).notes           # => nil when no speaker notes are present
-
+deck.slide(1).layout          # => :two_column
+deck.slide(1).slot(:left).text # => "Revenue rose 18% year over year."
 tree = Hadar::Renderer.new.describe(deck.slide(0))
-element = Hadar::Renderer.new.build(deck.slide(0))
-
-thumbnails = Hadar::SlideList.new(deck, selected: 0,
-  on_select: ->(slide, index) { puts "Selected slide #{index + 1}: #{slide.title}" })
-list_element = thumbnails.build(width: 280, height: 640)
 ```
 
-Built-in themes are `minimal`, `dark`, and `warm`. Custom JSONC themes can be
-loaded with `Hadar::Theme.load(path)` and passed to `Deck.parse` or
-`Deck.open`.
+`Renderer#build` returns a Zaniah element for embedding in a preview.
+
+## Editing and presenting
+
+### Source-backed slots
 
 Slots remain projections of the current Beid document. `slot.rich_text` returns
 a Zaniah rich-text editor whose bold, italic, link, and code spans come from the
@@ -89,6 +103,7 @@ paragraph styles are rejected rather than flattening or normalizing markup.
 Rich-text projection covers headings, paragraphs, block quotes, and text lists;
 tables, fenced code blocks, and Markdown strikethrough are not editable through
 this API yet.
+
 Slots returned before a successful edit are stale snapshots. Opened decks save
 atomically, preserve file permissions, and refuse to overwrite external changes:
 
@@ -101,22 +116,22 @@ deck.save
 ```
 
 Opened decks can detect and reload external changes directly or through the
-Zaniah platform watcher. A watcher is polled by the host's UI loop; successful
-reloads update the same deck object and invoke `on_reload`. Reload refuses to
-discard local unsaved Markdown edits, leaving both the in-memory and on-disk
-versions untouched. The host can keep its current slide selection and rebuild
-the preview after the callback:
+Zaniah platform watcher. Reload refuses to discard unsaved local edits. A
+watcher is polled by the host's UI loop; successful reloads update the same
+deck object and invoke `on_reload`:
 
 ```ruby
 watcher = deck.watch(on_reload: ->(_deck) { window.request_frame })
 watcher.poll(timeout: 0)
 ```
 
-`deck.reload_if_changed` performs the same safe check without a platform watcher.
-`Hadar::Application` wires this polling into attached windows and retains the
-selected slide by index when a reload changes the deck. Its presenter view shows
-the next slide, current slide's notes, and elapsed time. While presenting, each
-window tick requests a fresh frame so elapsed time stays current:
+`deck.reload_if_changed` performs the same safe check without a watcher.
+
+### Application and controls
+
+`Hadar::Application` wires the watcher into attached windows and keeps the
+selected slide index on reload. Its presenter view shows the next slide,
+current notes, and elapsed time:
 
 ```ruby
 app = Hadar::Application.new(deck)
@@ -125,47 +140,17 @@ app.attach(main_window: main)
 app.run
 ```
 
-`Application#run` polls the deck and ticks all attached windows in one loop.
-When at least two displays are available, Hadar creates its own presenter
-window and places it fullscreen on a secondary display (Wayland compositors may
-choose whether to honor the output request). With one display, it does not
-create a presenter automatically. A presenter window passed by the host is
-used as-is and is never moved or closed by Hadar. The automatically created
-presenter closes when the main window closes. Rich-text slot editors are backed
-by the current Markdown source and recreated after an external reload.
-They keep the caret or selection (and editor focus) when selected text maps
-unambiguously around one contiguous external edit; if an edit overlaps the
-selection or makes the mapping ambiguous, the selection and focus are cleared
-rather than moved to unrelated text. Arrow, Page Up/Down, Home, and End navigate
-slides; `P` or `F5` starts presentation,
-`F11` toggles fullscreen, and `Escape` exits presentation or fullscreen.
-`Ctrl/Cmd-K` opens the fuzzy command palette; `Ctrl/Cmd-S` saves an opened deck
-through its conflict-aware atomic writer.
+`Application#run` polls and ticks its windows. With a second display, Hadar
+opens its own fullscreen presenter window there; an explicitly passed
+`presenter_window:` stays under the host's control. After an external reload,
+rich-text editors are recreated. Their selection and focus survive only when
+they map unambiguously around the edit.
 
-PDF export produces one searchable 16:9 page for every slide, including all
-eight layouts. Pass a TrueType font that contains every visible character; the
-default font is selected from Zaniah's local font database:
+Arrow keys, Page Up/Down, Home, and End navigate slides. `P` or `F5` starts
+presentation; `F11` toggles fullscreen; `Escape` exits either mode.
+`Ctrl/Cmd-K` opens the command palette, and `Ctrl/Cmd-S` saves an opened deck.
 
-```ruby
-Hadar::Export::PDF.write(deck, "slides.pdf", font: "/path/to/font.ttf")
-```
-
-Okab currently requires TrueType outlines for PDF embedding. Hadar exports local
-PNG and JPEG images; remote images and other image formats are rejected.
-
-PNG sequence export renders all slides at the requested dimensions using
-Zaniah's headless renderer. It refuses to overwrite existing frames:
-
-```ruby
-app.export_png_sequence("slides-png", width: 1280, height: 720)
-```
-
-Animated PNG export holds each slide for three seconds by default, loops forever,
-and refuses to replace an existing target unless `overwrite: true` is passed:
-
-```ruby
-app.export_apng("slides.apng", width: 1280, height: 720, duration_ms: 2500)
-```
+### Notes and block editors
 
 Speaker notes can be written as a one-line or multiline HTML comment. Their
 Markdown remains in the source unchanged and does not appear in slide slots or
@@ -206,7 +191,7 @@ For a deck created with `Deck.parse`, pass a new path to `app.save(path)`.
 Replacing an existing unrelated path requires `overwrite: true`. Opened decks
 can use `app.save` or `Ctrl/Cmd-S`; the same external-change check applies.
 
-## Layouts
+### Layouts and themes
 
 `title`, `title+body`, `two-column`, `image+text`, `full-bleed-image`,
 `quote`, `code`, and `blank` are available. Explicit layout directives take
@@ -221,6 +206,11 @@ replacement update only the Markdown image destination or add one image node;
 the referenced assets are not copied. If an absolute selected asset lives
 outside the deck directory, its saved relative reference points outside that
 directory rather than copying the file.
+
+Built-in themes are `minimal`, `dark`, and `warm`. Custom JSONC themes can be
+loaded with `Hadar::Theme.load(path)` and passed to `Deck.parse` or
+`Deck.open`. A deck can also set a built-in theme in YAML front matter with
+`theme: dark`.
 
 Freeform placement is an explicit per-slide opt-in. Add `<!-- layout: freeform -->`
 and one `<!-- place: x,y,width,height -->` immediately before each Markdown
@@ -246,19 +236,47 @@ After an external edit reloads a freeform slide, select its block again before
 editing; source-order item numbers may have changed.
 
 `SlideList` creates thumbnail rows only for the visible viewport, using
-`Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for
-embedding in an application layout. Its `select(index)` method updates the
-selection and invokes the optional `on_select` callback. Wezen is not involved
-in live thumbnails; it encodes rendered slide frames as APNG.
+`Zaniah::UniformList`. `build(width:, height:)` returns a Zaniah element;
+`select(index)` updates the selection and invokes `on_select` when supplied:
+
+```ruby
+thumbnails = Hadar::SlideList.new(deck, selected: 0,
+  on_select: ->(slide, index) { puts "Selected slide #{index + 1}: #{slide.title}" })
+element = thumbnails.build(width: 280, height: 640)
+```
+
+## Export
+
+```ruby
+Hadar::Export::PDF.write(deck, "slides.pdf", font: "/path/to/font.ttf")
+Hadar::Export::PNGSequence.write(deck, "slides-png", width: 1280, height: 720)
+Hadar::Export::APNG.write(deck, "slides.apng", width: 1280, height: 720,
+  duration_ms: 2500)
+```
+
+PDF creates one searchable 16:9 page per slide for the eight template layouts.
+It needs a TrueType-outline font containing every visible character; without
+`font:`, Hadar uses Zaniah's local font database. PDF embeds local PNG and JPEG
+images, but rejects remote and other image formats. PNG-sequence export refuses
+to replace existing frames. APNG defaults to three seconds per slide and
+infinite looping; an existing target requires `overwrite: true`. Freeform
+placement is supported by the live and headless renderers, but not represented
+in PDF's template-based layout. `Application#export_png_sequence` and
+`#export_apng` wrap the corresponding exporters.
 
 ## Development
 
-Run the specs with `bundle exec rake`. Check the 100-slide virtual-list
-layout/scene-build budget with `BUDGET=1 bundle exec ruby bench/slide_list.rb`;
-the headless benchmark skips software pixel rasterization. Hadar depends on
-Beid, Antares, Kochab, Okab, Spica, Wezen, Xamidimura, and Zaniah; its
-declarative `Describe`, `UniformList`, and input keymap APIs are reused directly.
+```sh
+bundle install
+bundle exec rake
+```
+
+Check the 100-slide thumbnail layout/scene-build budget with
+`BUDGET=1 bundle exec ruby bench/slide_list.rb`. See the
+[template-layout](docs/adr/001-template-layouts.md) and
+[freeform-placement](docs/adr/002-opt-in-freeform-layout.md) decisions for the
+source model.
 
 ## License
 
-MIT. See [LICENSE.txt](LICENSE.txt).
+Hadar is released under the [MIT License](LICENSE.txt).
