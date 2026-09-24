@@ -9,7 +9,8 @@ RSpec.describe Hadar::Export::PNGSequence do
 
     Dir.mktmpdir do |directory|
       output = File.join(directory, "frames")
-      paths = described_class.write(deck, output, width: 96, height: 54)
+      app = Hadar::Application.new(deck, watch: false)
+      paths = app.export_png_sequence(output, width: 96, height: 54)
 
       expect(paths.map { |path| File.basename(path) }).to eq(["slide-001.png", "slide-002.png"])
       paths.each do |path|

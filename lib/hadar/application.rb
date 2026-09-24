@@ -115,7 +115,12 @@ module Hadar
     def command_palette = @command_palette
 
     def export_png_sequence(directory, width: 1280, height: 720)
-      PNGSequence.write(deck, directory, renderer: renderer, width: width, height: height)
+      Export::PNGSequence.write(deck, directory, renderer: renderer, width: width, height: height)
+    end
+
+    def export_apng(path, width: 1280, height: 720, duration_ms: Export::APNG::DEFAULT_DURATION_MS, loop: 0, overwrite: false)
+      Export::APNG.write(deck, path, renderer: renderer, width: width, height: height,
+        duration_ms: duration_ms, loop: loop, overwrite: overwrite)
     end
 
     def save(path = nil, overwrite: false)
@@ -393,7 +398,8 @@ module Hadar
         "Toggle presentation" => ->(*) { presenter.started? ? stop_presentation : start_presentation },
         "Toggle fullscreen" => ->(*) { toggle_fullscreen(window: :main) },
         "Save" => ->(*) { save },
-        "Export PNG sequence…" => ->(*) { prompt_png_sequence_directory }
+        "Export PNG sequence…" => ->(*) { prompt_png_sequence_directory },
+        "Export APNG…" => ->(*) { prompt_apng_path }
       }
     end
 
@@ -404,6 +410,18 @@ module Hadar
 
       directory = @main_window.prompt_for_paths(directories: true).first
       export_png_sequence(directory) if directory && !directory.empty?
+    end
+
+    def prompt_apng_path
+      unless @main_window.respond_to?(:prompt_for_paths)
+        raise Error, "this window backend cannot choose a file; call export_apng(path)"
+      end
+
+      path = @main_window.prompt_for_paths(save: true).first
+      return unless path && !path.empty?
+
+      path = "#{path}.apng" if File.extname(path).empty?
+      export_apng(path, overwrite: true)
     end
 
     def slot_editor_for_selected_slide

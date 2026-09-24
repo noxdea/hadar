@@ -23,8 +23,8 @@ Missing, unreadable, and unsupported images fail preview construction with a
 saving continues to write only the Markdown source. Its window host polls for
 external Markdown edits and can show a next-slide, notes, and elapsed-time
 presenter view. The host supports slide navigation, fullscreen, a fuzzy command
-palette, and PNG-sequence export. When a secondary display is available, the
-owned presenter window opens there fullscreen.
+palette, PNG-sequence, and APNG export. When a secondary display is available,
+the owned presenter window opens there fullscreen.
 
 ## Installation
 
@@ -160,6 +160,13 @@ Zaniah's headless renderer. It refuses to overwrite existing frames:
 app.export_png_sequence("slides-png", width: 1280, height: 720)
 ```
 
+Animated PNG export holds each slide for three seconds by default, loops forever,
+and refuses to replace an existing target unless `overwrite: true` is passed:
+
+```ruby
+app.export_apng("slides.apng", width: 1280, height: 720, duration_ms: 2500)
+```
+
 Speaker notes can be written as a one-line or multiline HTML comment. Their
 Markdown remains in the source unchanged and does not appear in slide slots or
 the preview tree:
@@ -219,15 +226,15 @@ directory rather than copying the file.
 `Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for
 embedding in an application layout. Its `select(index)` method updates the
 selection and invokes the optional `on_select` callback. Wezen is not involved
-in live thumbnails; it encodes raster frames for export workflows.
+in live thumbnails; it encodes rendered slide frames as APNG.
 
 ## Development
 
 Run the specs with `bundle exec rake`. Check the 100-slide virtual-list
 layout/scene-build budget with `BUDGET=1 bundle exec ruby bench/slide_list.rb`;
 the headless benchmark skips software pixel rasterization. Hadar depends on
-Beid, Antares, Kochab, Okab, Spica, Xamidimura, and Zaniah; its declarative `Describe`,
-`UniformList`, and input keymap APIs are reused directly.
+Beid, Antares, Kochab, Okab, Spica, Wezen, Xamidimura, and Zaniah; its
+declarative `Describe`, `UniformList`, and input keymap APIs are reused directly.
 
 ## License
 

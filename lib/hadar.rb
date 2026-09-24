@@ -7,6 +7,7 @@ require "antares"
 require "kochab"
 require "okab"
 require "xamidimura"
+require "wezen"
 require "zaniah"
 require "zaniah/ui"
 
@@ -29,3 +30,4 @@ end
 
 require_relative "hadar/export/pdf"
 require_relative "hadar/export/png_sequence"
+require_relative "hadar/export/apng"

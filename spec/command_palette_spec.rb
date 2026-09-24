@@ -39,6 +39,8 @@ RSpec.describe Hadar::Application do
     app.command_palette.query = "nxt"
 
     expect(app.command_palette.matches.map(&:candidate)).to include("Next slide")
+    app.command_palette.query = "apng"
+    expect(app.command_palette.matches.map(&:candidate)).to include("Export APNG…")
     app.command_palette.choose("Next slide")
     expect(app.selected_index).to eq(1)
 

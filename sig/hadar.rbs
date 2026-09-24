@@ -131,6 +131,7 @@ module Hadar
     def main_view: (width: Numeric, height: Numeric) -> Zaniah::Element
     def command_palette: () -> CommandPalette?
     def export_png_sequence: (String directory, ?width: Integer, ?height: Integer) -> Array[String]
+    def export_apng: (String path, ?width: Integer, ?height: Integer, ?duration_ms: Integer, ?loop: Integer, ?overwrite: bool) -> String
     def save: (?String path, ?overwrite: bool) -> Deck
     def selected_slot: () -> Slot?
     def select_slot: (String | Symbol name) -> Slot
@@ -201,6 +202,16 @@ module Hadar
   end
 
   module Export
+    class APNG
+      MAX_PIXELS: Integer
+      DEFAULT_DURATION_MS: Integer
+
+      def self.render: (Deck deck, ?renderer: Renderer, ?width: Integer, ?height: Integer,
+        ?duration_ms: Integer, ?loop: Integer) -> String
+      def self.write: (Deck deck, String path, ?overwrite: bool, ?renderer: Renderer, ?width: Integer,
+        ?height: Integer, ?duration_ms: Integer, ?loop: Integer) -> String
+    end
+
     class PNGSequence
       MAX_PIXELS: Integer
 
