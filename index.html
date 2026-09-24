@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#020617">
+  <meta name="description" content="Hadar turns Markdown into editable slide decks with live preview, presenter tools, and PDF or image export.">
+  <title>Hadar — slides that stay Markdown</title>
+  <link rel="canonical" href="https://noxdea.github.io/hadar/">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="#top" aria-label="Hadar home">Hadar<span aria-hidden="true">.</span></a>
+    <nav aria-label="Primary navigation">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/noxdea/hadar">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title">Slides that stay Markdown.</h1>
+        <p>Build and edit presentations from ordinary Markdown files. Hadar keeps the source in place while you preview, present, and export the deck.</p>
+        <div class="hero-actions">
+          <a class="button" href="https://github.com/noxdea/hadar#quick-start">Read the quick start</a>
+          <a class="text-link" href="https://rubygems.org/gems/hadar">View on RubyGems</a>
+        </div>
+      </div>
+      <figure class="deck-figure">
+        <div class="pane source-pane">
+          <div class="pane-label">report.md</div>
+          <pre><code>---
+theme: dark
+---
+
+# Quarterly report
+
+## 2026 Q3
+
+---
+
+# Next steps
+
+Keep the source editable.</code></pre>
+        </div>
+        <div class="pane preview-pane">
+          <div class="pane-label">Slide preview</div>
+          <div class="slide" aria-label="Preview of the first slide">
+            <span class="slide-mark" aria-hidden="true"></span>
+            <h2>Quarterly<br>report</h2>
+            <p>2026 Q3</p>
+          </div>
+        </div>
+        <figcaption>Write the deck as text. See the slide as you work.</figcaption>
+      </figure>
+    </section>
+
+    <section class="features wrap" id="features" aria-labelledby="features-title">
+      <div class="section-intro">
+        <h2 id="features-title">A presentation workflow, without a second source of truth.</h2>
+        <p>Hadar is a Ruby library for apps that need editable decks and reliable output.</p>
+      </div>
+      <div class="feature-list">
+        <article>
+          <h3>Edit the source</h3>
+          <p>Text, images, tables, code blocks, and speaker notes stay connected to the Markdown they came from.</p>
+        </article>
+        <article>
+          <h3>Present with context</h3>
+          <p>Use live preview, keyboard navigation, and a presenter view that shows the next slide and your notes.</p>
+        </article>
+        <article>
+          <h3>Export the deck</h3>
+          <p>Produce searchable PDF pages, a PNG sequence, or an animated PNG from supported layouts.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="install wrap" id="install" aria-labelledby="install-title">
+      <div>
+        <h2 id="install-title">Start with a Markdown file.</h2>
+        <p>Requires CRuby 3.2 or newer. Hadar is a library; it does not install a command-line executable.</p>
+      </div>
+      <div class="install-command"><span>Terminal</span><code>gem install hadar</code></div>
+      <a class="text-link" href="https://github.com/noxdea/hadar#quick-start">Explore the Ruby API</a>
+    </section>
+  </main>
+
+  <footer class="site-footer wrap">
+    <span>Hadar is open source under the MIT License.</span>
+    <a href="https://github.com/noxdea/hadar">Source on GitHub</a>
+  </footer>
+</body>
+</html>
