@@ -100,6 +100,9 @@ module Hadar
         editor_pane = Zaniah::Div.new.w(editor_width).h_full.p(12).gap(8)
           .style(flex_direction: :column, border: 1, border_color: deck.theme.colors.fetch("muted"))
         editor_pane.child(Zaniah::UI::Label.new(slot_title, size: :sm))
+        if selected_index && deck.slide(selected_index).layout == :freeform
+          editor_pane.child(Zaniah::UI::Label.new("Freeform — このスライドは素の Markdown ビューアでは崩れます", tone: :muted))
+        end
         editor_pane.child(slot_selector) if selected_index && deck.slide(selected_index).slots.any?
         editor_pane.child(editor.w_full.flex_1) if editor
         editor_pane.child(Zaniah::UI::Label.new("Editing unavailable: #{error}", tone: :muted)) if error
@@ -166,7 +169,7 @@ module Hadar
 
     def insert_or_replace_selected_image(path)
       slot = selected_slot || raise(Error, "there is no selected slot")
-      raise Error, "select the image slot first" unless slot.name == :image
+      raise Error, "select the image slot first" unless image_slot?(slot)
 
       updated = slot.empty? ? slot.insert_image(path) : slot.replace_image(path)
       finish_slot_edit
@@ -427,12 +430,13 @@ module Hadar
     def slot_editor_for_selected_slide
       return [nil, nil] unless selected_index
       unless selected_slot_name
-        @body_editor_error ||= "this slide has no editable slots"
+        @body_editor_error ||= deck.slide(selected_index).layout == :freeform ?
+          "select a block to edit after reloading this freeform slide" : "this slide has no editable slots"
         return [nil, @body_editor_error]
       end
 
       slot = selected_slot
-      if slot.name == :image
+      if image_slot?(slot)
         pending_body_editor_focus(:clear) if @pending_body_editor_reload && @pending_body_editor_reload[:slot] == slot.name
         [image_slot_editor(slot), @body_editor_error]
       elsif slot.nodes.any? { |node| %i[table code_block].include?(node.type) }
@@ -480,7 +484,7 @@ module Hadar
     end
 
     def image_slot_editor(slot)
-      return Zaniah::UI::Label.new("Select an image slot to insert or replace an image.") unless slot.name == :image
+      return Zaniah::UI::Label.new("Select an image slot to insert or replace an image.") unless image_slot?(slot)
       if !slot.empty? && !(slot.nodes.one? && slot.nodes.first.type == :image)
         return Zaniah::UI::Label.new("This image slot contains multiple images and cannot be edited safely.", tone: :muted)
       end
@@ -606,6 +610,10 @@ module Hadar
       slide.slots.key?(:body) ? :body : slide.slots.keys.first
     end
 
+    def image_slot?(slot)
+      slot.name == :image || (slot.nodes.one? && slot.nodes.first.type == :image)
+    end
+
     def key_context(window)
       (window.dispatcher.focused&.ancestors || []).reverse.each_with_object({}) do |handle, context|
         context.merge!(handle.context)
@@ -681,8 +689,13 @@ module Hadar
         [[selected_index || 0, 0].max, deck.length - 1].min
       end
       @pending_body_editor_reload = nil if @selected_index != previous_index
-      @selected_slot_name = @selected_index && deck.slide(@selected_index).slots.key?(previous_slot) ? previous_slot :
-        (@selected_index && default_slot_name(deck.slide(@selected_index)))
+      @selected_slot_name = if @selected_index && deck.slide(@selected_index).layout == :freeform
+        nil # Positional item IDs may now refer to different blocks; require explicit reselection.
+      elsif @selected_index && deck.slide(@selected_index).slots.key?(previous_slot)
+        previous_slot
+      else
+        @selected_index && default_slot_name(deck.slide(@selected_index))
+      end
       reset_slot_editor_state_after_reload
       presenter.reconcile!
       rebuild_slide_list

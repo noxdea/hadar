@@ -20,3 +20,5 @@ one from the parsed Markdown structure. A free-form canvas is out of scope.
 Template content can remain a projection of the source AST and can be edited
 without duplicating slide state. Users do not get arbitrary element placement;
 reconsider only for a later format that can represent positions explicitly.
+
+The later opt-in format is specified in [ADR 002](002-opt-in-freeform-layout.md).

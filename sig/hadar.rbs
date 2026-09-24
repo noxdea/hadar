@@ -30,6 +30,7 @@ module Hadar
     def text_for: (Beid::Node node) -> String
     def image_path: () -> String?
     def resolved_image_path: () -> String?
+    def resolved_image_path_for: (Beid::Node node) -> String
     def table_rows: (?table: Integer) -> Array[Array[String]]
     def replace_text: (String text) -> Slot
     def rich_text: (?editable: bool) -> Zaniah::UI::RichText
@@ -49,6 +50,7 @@ module Hadar
     attr_reader slots: Hash[Symbol, Slot]
     attr_reader theme: Theme
     attr_reader notes: String?
+    attr_reader placements: Hash[Symbol, Array[Float]]
 
     def initialize: (index: Integer, document: Beid::Document, nodes: Array[Beid::Node],
       ?layout: String | Symbol | nil, theme: Theme, deck: Deck) -> void

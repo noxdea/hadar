@@ -12,7 +12,8 @@ module Hadar
       Definition.new(:full_bleed_image, %i[image]),
       Definition.new(:quote, %i[quote attribution]),
       Definition.new(:code, %i[title code]),
-      Definition.new(:blank, [])
+      Definition.new(:blank, []),
+      Definition.new(:freeform, [])
     ].freeze
     private_constant :Definition
 

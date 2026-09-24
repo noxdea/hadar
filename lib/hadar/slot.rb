@@ -44,13 +44,20 @@ module Hadar
       return if nodes.empty?
       raise Error, "image_path requires a slot containing exactly one image" unless nodes.one? && nodes.first.type == :image
 
-      destination = nodes.first.attributes.fetch(:destination)
-      destination.match?(/\Ahttps?:\/\//i) ? destination : URI::DEFAULT_PARSER.unescape(destination)
+      destination_path(nodes.first)
     end
 
     def resolved_image_path
       path = image_path
       path && @deck.resolve_image_path(path)
+    end
+
+    def resolved_image_path_for(node)
+      unless node.is_a?(Beid::Node) && node.type == :image && nodes.any? { |entry| contains_node?(entry, node) }
+        raise Error, "image is not part of this slot"
+      end
+
+      @deck.resolve_image_path(destination_path(node))
     end
 
     def replace_text(text)
@@ -94,6 +101,15 @@ module Hadar
     def owned_by?(deck) = @deck.equal?(deck)
 
     private
+
+    def contains_node?(entry, target)
+      entry.equal?(target) || entry.children.any? { |child| contains_node?(child, target) }
+    end
+
+    def destination_path(node)
+      destination = node.attributes.fetch(:destination)
+      destination.match?(/\Ahttps?:\/\//i) ? destination : URI::DEFAULT_PARSER.unescape(destination)
+    end
 
     def table_nodes = nodes.select { |node| node.type == :table }
 

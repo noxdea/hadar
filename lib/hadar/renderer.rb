@@ -41,6 +41,12 @@ module Hadar
         node :stack, props: {gap: :number} do |props, children|
           Zaniah::Element.new.flex_col.style(gap: props.fetch(:gap)).children(children)
         end
+        node :placed, props: {x: :number, y: :number, width: :number, height: :number} do |props, children|
+          Zaniah::Element.new.flex_col.style(position: :absolute,
+            left: Zaniah.percent(props.fetch(:x)), top: Zaniah.percent(props.fetch(:y)),
+            width: Zaniah.percent(props.fetch(:width)), height: Zaniah.percent(props.fetch(:height)))
+            .children(children)
+        end
         node :columns, props: {gap: :number} do |props, children|
           Zaniah::Element.new.flex_row.style(gap: props.fetch(:gap)).children(children)
         end
@@ -96,6 +102,21 @@ module Hadar
       theme = slide_theme(slide)
       gap = theme.spacing.fetch("gap")
       case slide.layout
+      when :freeform
+        slide.placements.map do |name, (x, y, width, height)|
+          slot = slide.slot(name)
+          entry = slot.nodes.first
+          children = if entry.type == :image
+            [image_node(slot)]
+          elsif entry.type == :heading
+            [text_node(slot.text, theme.font.fetch("title_size"), theme),
+              *images_in(entry).map { |image| image_node(slot, image: image) }]
+          else
+            [*render_blocks(slot, theme), *images_in(entry).map { |image| image_node(slot, image: image) }]
+          end
+          node(:placed, {x: x, y: y, width: width, height: height}, children.compact,
+            "slide-#{slide.index}-#{name}")
+        end
       when :title
         stack([
           text_node(slide.slot(:title).text, theme.font.fetch("title_size"), theme),
@@ -226,10 +247,14 @@ module Hadar
       Zaniah::Describe::Node.new(type, props, children, key)
     end
 
-    def image_node(slot)
+    def images_in(entry)
+      [entry, *entry.children.flat_map { |child| images_in(child) }].select { |node| node.type == :image }
+    end
+
+    def image_node(slot, image: nil)
       return if slot.empty?
 
-      path = slot.resolved_image_path
+      path = image ? slot.resolved_image_path_for(image) : slot.resolved_image_path
       node(:image, {path: path}, [], "slide-#{slot.slide_index}-#{slot.name}-image")
     end
 

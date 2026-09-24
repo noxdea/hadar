@@ -222,6 +222,29 @@ the referenced assets are not copied. If an absolute selected asset lives
 outside the deck directory, its saved relative reference points outside that
 directory rather than copying the file.
 
+Freeform placement is an explicit per-slide opt-in. Add `<!-- layout: freeform -->`
+and one `<!-- place: x,y,width,height -->` immediately before each Markdown
+block. Coordinates are percentages of the slide's inner canvas (after theme
+margins); every rectangle must fit inside 0–100%. An image-only paragraph is
+placed as an image. For example:
+
+```markdown
+<!-- layout: freeform -->
+
+<!-- place: 5,8,90,20 -->
+# Quarterly report
+
+<!-- place: 10,35,80,50 -->
+Revenue increased **18%**.
+```
+
+The content stays readable in a plain Markdown viewer, but its placement does
+not. Hadar marks freeform slides in the editor with a compatibility warning.
+Missing, malformed, or overflowing positions are errors; Hadar never silently
+drops a block. Edit the directives in the Markdown source to reposition items.
+After an external edit reloads a freeform slide, select its block again before
+editing; source-order item numbers may have changed.
+
 `SlideList` creates thumbnail rows only for the visible viewport, using
 `Zaniah::UniformList`; `build(width:, height:)` returns the Zaniah element for
 embedding in an application layout. Its `select(index)` method updates the

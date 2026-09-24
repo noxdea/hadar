@@ -2,13 +2,15 @@
 
 module Hadar
   class Slide
-    attr_reader :index, :document, :nodes, :layout, :slots, :theme, :notes
+    attr_reader :index, :document, :nodes, :layout, :slots, :theme, :notes, :placements
 
     def initialize(index:, document:, nodes:, layout: nil, theme:, deck:)
       @index, @document, @nodes, @theme, @deck = index, document, nodes.freeze, theme, deck
       @notes, @notes_ranges = extract_notes
       @layout = Layout.select(content_nodes, requested: layout)
+      @placements = {}
       @slots = build_slots.freeze
+      @placements.freeze
       freeze
     end
 
@@ -18,7 +20,11 @@ module Hadar
       end
     end
 
-    def title = slot(:title).text
+    def title
+      return slot(:title).text unless layout == :freeform
+
+      slots.values.find { |entry| entry.nodes.first&.type == :heading }&.text.to_s
+    end
 
     private
 
@@ -75,6 +81,8 @@ module Hadar
 
     def build_slots
       content = content_nodes
+      return build_freeform_slots(content) if layout == :freeform
+
       definition = Layout.fetch(layout)
       mapping = definition.slots.to_h { |name| [name, []] }
       case layout
@@ -112,6 +120,49 @@ module Hadar
         [name, Slot.new(name: name, nodes: entries, document: document,
           deck: @deck, slide_index: index)]
       end
+    end
+
+    def build_freeform_slots(content)
+      pending = nil
+      slots = {}
+      content.each do |node|
+        next if node.type == :link_definition
+
+        if placement_directive?(node)
+          raise Error, "freeform placement must be followed by one content block" if pending
+
+          pending = parse_placement(node.attributes.dig(:values, "place"))
+          next
+        end
+        raise Error, "freeform content requires a preceding place directive" unless pending
+
+        name = :"item_#{slots.length + 1}"
+        body = node.type == :paragraph && node.children.one? && node.children.first.type == :image ? node.children.first : node
+        slots[name] = Slot.new(name: name, nodes: [body], document: document,
+          deck: @deck, slide_index: index)
+        @placements[name] = pending.freeze
+        pending = nil
+      end
+      raise Error, "freeform placement must be followed by one content block" if pending
+
+      slots
+    end
+
+    def placement_directive?(node)
+      node.type == :directive && node.attributes[:kind] == :html_comment &&
+        node.attributes[:values]&.key?("place")
+    end
+
+    def parse_placement(value)
+      unless value.to_s.match?(/\A\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*\z/)
+        raise Error, "place must contain x,y,width,height percentages"
+      end
+      x, y, width, height = value.split(",").map { |part| Float(part) }
+      unless width.positive? && height.positive? && x + width <= 100 && y + height <= 100
+        raise Error, "freeform placement must fit within the slide (0–100%)"
+      end
+
+      [x, y, width, height]
     end
 
     def layout_directive?(node)
