@@ -184,7 +184,7 @@ module Hadar
   end
 
   class Renderer
-    def initialize: () -> void
+    def initialize: (?font: Alhena::Font?) -> void
     def describe: (Slide slide) -> Zaniah::Describe::Node
     def build: (Slide slide) -> Zaniah::Element
     def surface: (Slide slide) -> Zaniah::Describe::Surface

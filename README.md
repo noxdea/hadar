@@ -255,14 +255,14 @@ Hadar::Export::APNG.write(deck, "slides.apng", width: 1280, height: 720,
   duration_ms: 2500)
 ```
 
-PDF creates one searchable 16:9 page per slide for the eight template layouts.
+PDF creates one searchable 16:9 page per slide from the same element tree used
+by PNG export, including freeform placement.
 It needs a TrueType-outline font containing every visible character; without
 `font:`, Hadar uses Zaniah's local font database. PDF embeds local PNG and JPEG
 images, but rejects remote and other image formats. PNG-sequence export refuses
 to replace existing frames. APNG defaults to three seconds per slide and
-infinite looping; an existing target requires `overwrite: true`. Freeform
-placement is supported by the live and headless renderers, but not represented
-in PDF's template-based layout. `Application#export_png_sequence` and
+infinite looping; an existing target requires `overwrite: true`.
+`Application#export_png_sequence` and
 `#export_apng` wrap the corresponding exporters.
 
 ## Development

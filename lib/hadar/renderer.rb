@@ -2,9 +2,10 @@
 
 module Hadar
   class Renderer
-    def initialize
+    def initialize(font: nil)
       @font_db = nil
       @fonts = {}
+      @font_override = font
       @vocabulary = build_vocabulary
     end
 
@@ -92,6 +93,8 @@ module Hadar
     end
 
     def font(family)
+      return @font_override if @font_override
+
       @fonts[family] ||= begin
         @font_db ||= Zaniah::TextSystem::FontDB.new
         @font_db.find(family: family == "sans-serif" ? nil : family)

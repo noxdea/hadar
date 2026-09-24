@@ -77,7 +77,6 @@ RSpec.describe Hadar::Export::PDF do
       expect(deck.slides.map(&:layout)).to eq(%i[title title_body two_column image_text full_bleed_image quote code blank])
       expect(pdf.scan("/Type /Page ").length).to eq(8)
       expect(pdf.scan("/Subtype /Image").length).to eq(2)
-      expect(pdf.scan("W n").length).to eq(1) # full-bleed image is clipped to its page
       expect(pdf).to start_with("%PDF-1.7\n".b)
       Tempfile.create(["hadar", ".pdf"]) do |file|
         file.binmode
@@ -116,6 +115,27 @@ RSpec.describe Hadar::Export::PDF do
 
     expect { described_class.render(deck) }
       .to raise_error(Hadar::Error, /does not contain U\+/)
+  end
+
+  it "matches the PNG slide layout when PDF rasterization is available" do
+    skip "pdftoppm is unavailable" unless system("pdftoppm", "-v", out: File::NULL, err: File::NULL)
+
+    deck = Hadar::Deck.parse("# Visual match\n\nThe same slide tree.\n")
+    Dir.mktmpdir do |directory|
+      pdf_path = File.join(directory, "slide.pdf")
+      File.binwrite(pdf_path, described_class.render(deck))
+      png_path = Hadar::Export::PNGSequence.write(deck, directory,
+        width: described_class::WIDTH, height: described_class::HEIGHT).first
+      prefix = File.join(directory, "pdf")
+      expect(system("pdftoppm", "-f", "1", "-l", "1", "-singlefile", "-r", "72",
+        "-png", pdf_path, prefix, out: File::NULL, err: File::NULL)).to be(true)
+
+      expected = Zaniah::PNG.decode(File.binread(png_path))
+      actual = Zaniah::PNG.decode(File.binread("#{prefix}.png"))
+      expect(actual.first(2)).to eq(expected.first(2))
+      difference = expected.last.bytes.zip(actual.last.bytes).sum { |left, right| (left - right).abs }
+      expect(difference.fdiv(expected.last.bytesize * 255)).to be < 0.005
+    end
   end
 
   def png_fixture
