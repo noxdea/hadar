@@ -8,6 +8,9 @@
 /pkg/
 /spec/reports/
 /tmp/
+/_site/
+/.jekyll-cache/
+/.jekyll-metadata
 Gemfile.lock
 .rspec_status
 *.gem

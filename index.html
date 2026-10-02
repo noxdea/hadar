@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#020617">
   <meta name="description" content="Hadar turns Markdown into editable slide decks with live preview, presenter tools, and PDF or image export.">
+  <meta property="og:title" content="Hadar — slides that stay Markdown">
+  <meta property="og:description" content="Edit, preview, present, and export slide decks while keeping Markdown as the source.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://noxdea.github.io/hadar/">
+  <meta property="og:image" content="https://noxdea.github.io/hadar/docs/media/overview.png">
   <title>Hadar — slides that stay Markdown</title>
   <link rel="canonical" href="https://noxdea.github.io/hadar/">
   <link rel="stylesheet" href="styles.css">
@@ -16,6 +21,7 @@
     <nav aria-label="Primary navigation">
       <a href="#features">Features</a>
       <a href="#install">Install</a>
+      <a href="docs/">User guide</a>
       <a href="https://github.com/noxdea/hadar">GitHub</a>
     </nav>
   </header>
@@ -26,36 +32,20 @@
         <h1 id="hero-title">Slides that stay Markdown.</h1>
         <p>Build and edit presentations from ordinary Markdown files. Hadar keeps the source in place while you preview, present, and export the deck.</p>
         <div class="hero-actions">
-          <a class="button" href="https://github.com/noxdea/hadar#quick-start">Read the quick start</a>
+          <a class="button" href="docs/">Read the user guide</a>
           <a class="text-link" href="https://rubygems.org/gems/hadar">View on RubyGems</a>
         </div>
       </div>
-      <figure class="deck-figure">
-        <div class="pane source-pane">
-          <div class="pane-label">report.md</div>
-          <pre><code>---
-theme: dark
----
-
-# Quarterly report
-
-## 2026 Q3
-
----
-
-# Next steps
-
-Keep the source editable.</code></pre>
-        </div>
-        <div class="pane preview-pane">
-          <div class="pane-label">Slide preview</div>
-          <div class="slide" aria-label="Preview of the first slide">
-            <span class="slide-mark" aria-hidden="true"></span>
-            <h2>Quarterly<br>report</h2>
-            <p>2026 Q3</p>
-          </div>
-        </div>
-        <figcaption>Write the deck as text. See the slide as you work.</figcaption>
+      <div class="hero-install">
+        <p>Start with an ordinary Markdown file.</p>
+        <pre><code>gem install hadar
+ruby present.rb</code></pre>
+        <p>CRuby 3.2+ · Ruby library, preview, and headless export</p>
+        <a class="text-link" href="docs/#open-the-presentation-window">Create your presentation script</a>
+      </div>
+      <figure class="application-preview">
+        <img src="docs/media/overview.png" width="1280" height="800" alt="Hadar showing slide thumbnails, a two-column revenue slide, and its source-backed title editor." fetchpriority="high">
+        <figcaption>The actual Hadar interface, rendered from the getting-started deck.</figcaption>
       </figure>
     </section>
 
@@ -65,6 +55,10 @@ Keep the source editable.</code></pre>
         <p>Hadar is a Ruby library for apps that need editable decks and reliable output.</p>
       </div>
       <div class="feature-list">
+        <article>
+          <h3>Choose a layout</h3>
+          <p>Use eight templates selected from your content, or opt in to freeform placement. Three built-in themes control color, typography, and spacing.</p>
+        </article>
         <article>
           <h3>Edit the source</h3>
           <p>Text, images, tables, code blocks, and speaker notes stay connected to the Markdown they came from.</p>
@@ -86,7 +80,19 @@ Keep the source editable.</code></pre>
         <p>Requires CRuby 3.2 or newer. Hadar is a library; it does not install a command-line executable.</p>
       </div>
       <div class="install-command"><span>Terminal</span><code>gem install hadar</code></div>
-      <a class="text-link" href="https://github.com/noxdea/hadar#quick-start">Explore the Ruby API</a>
+      <a class="text-link" href="docs/">Write and open your first deck</a>
+    </section>
+
+    <section class="reading wrap" aria-labelledby="reading-title">
+      <h2 id="reading-title">Keep the guide close.</h2>
+      <div class="reading-list">
+        <a href="docs/"><strong>Getting started</strong><span>Install the gem, write Markdown, and open a presentation.</span></a>
+        <a href="docs/usage.html"><strong>Editing and presenting</strong><span>Source-backed edits, safe saves, keyboard controls, and notes.</span></a>
+        <a href="docs/layouts.html"><strong>Layouts and Markdown</strong><span>Slide boundaries, semantic slots, and freeform placement.</span></a>
+        <a href="docs/themes.html"><strong>Themes</strong><span>Built-in styles and custom JSONC colors, fonts, and spacing.</span></a>
+        <a href="docs/export.html"><strong>Export</strong><span>Searchable PDF, PNG frames, animated PNG, and output limits.</span></a>
+        <a href="docs/development.html"><strong>Development</strong><span>Run checks and maintain the website and documentation.</span></a>
+      </div>
     </section>
   </main>
 

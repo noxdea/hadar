@@ -1,0 +1,43 @@
+title: Hadar
+description: >-
+  Markdown-backed slide decks with source-preserving editing, live preview,
+  and export.
+url: https://noxdea.github.io
+baseurl: /hadar
+markdown: kramdown
+plugins:
+  - jekyll-relative-links
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+exclude:
+  - assets/themes
+  - bench
+  - CHANGELOG.md
+  - docs/adr
+  - docs/Gemfile
+  - docs/Gemfile.lock
+  - Gemfile
+  - Gemfile.lock
+  - hadar.gemspec
+  - lib
+  - LICENSE.txt
+  - Rakefile
+  - README.md
+  - sig
+  - spec
+  - tmp
+  - tools
+guide:
+  - title: Getting started
+    url: /docs/
+  - title: Editing and presenting
+    url: /docs/usage.html
+  - title: Layouts and Markdown
+    url: /docs/layouts.html
+  - title: Themes
+    url: /docs/themes.html
+  - title: Export
+    url: /docs/export.html
+  - title: Development
+    url: /docs/development.html

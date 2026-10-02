@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ page.description | escape }}">
+  <meta name="theme-color" content="#020617">
+  <title>{{ page.title | escape }} · Hadar User Guide</title>
+  <link rel="canonical" href="{{ page.url | absolute_url }}">
+  <link rel="stylesheet" href="{{ '/styles.css' | relative_url }}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="{{ '/' | relative_url }}">Hadar<span aria-hidden="true">.</span> <small>User guide</small></a>
+    <nav aria-label="Primary navigation">
+      <a href="{{ '/' | relative_url }}">Home</a>
+      <a href="{{ '/docs/' | relative_url }}">User guide</a>
+      <a href="https://github.com/noxdea/hadar">GitHub</a>
+    </nav>
+  </header>
+  <div class="guide-shell wrap">
+    <aside class="guide-nav" aria-label="Guide navigation">
+      <nav>
+        <h2>Using Hadar</h2>
+        {% for item in site.guide %}
+        <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+        {% endfor %}
+      </nav>
+    </aside>
+    <main id="main" class="guide-content">
+      <details class="mobile-nav">
+        <summary>Browse the user guide</summary>
+        <nav aria-label="Mobile guide navigation">
+          {% for item in site.guide %}
+          <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+          {% endfor %}
+        </nav>
+      </details>
+      <div class="page-heading">
+        <p class="breadcrumb"><a href="{{ '/docs/' | relative_url }}">User guide</a> / {{ page.title }}</p>
+        <h1>{{ page.title }}</h1>
+        <p class="lead">{{ page.description }}</p>
+      </div>
+      <article class="markdown">{{ content }}</article>
+      <nav class="pagination" aria-label="Adjacent pages">
+        {% for item in site.guide %}
+          {% if item.url == page.url %}
+            {% unless forloop.first %}
+              {% assign previous_index = forloop.index0 | minus: 1 %}
+              {% assign previous = site.guide[previous_index] %}
+              <a href="{{ previous.url | relative_url }}"><small>Previous</small>{{ previous.title }}</a>
+            {% endunless %}
+            {% unless forloop.last %}
+              {% assign next = site.guide[forloop.index] %}
+              <a class="next-page" href="{{ next.url | relative_url }}"><small>Next</small>{{ next.title }}</a>
+            {% endunless %}
+          {% endif %}
+        {% endfor %}
+      </nav>
+    </main>
+  </div>
+  <footer class="site-footer wrap">
+    <span>Hadar is open source under the <a href="https://github.com/noxdea/hadar/blob/main/LICENSE.txt">MIT License</a>.</span>
+    <a href="https://github.com/noxdea/hadar/blob/main/{{ page.path }}">Edit this page on GitHub</a>
+  </footer>
+</body>
+</html>
