@@ -27,11 +27,11 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "beid", "~> 0.1.0"
-  spec.add_dependency "antares", "~> 0.2.1"
+  spec.add_dependency "antares", ">= 0.2.1", "< 0.4.0"
   spec.add_dependency "kochab", "~> 0.2.0"
   spec.add_dependency "okab", "~> 0.2.0"
-  spec.add_dependency "spica", "~> 0.1.0"
+  spec.add_dependency "spica", ">= 0.1", "< 0.3"
   spec.add_dependency "xamidimura", "~> 0.1.0"
   spec.add_dependency "wezen", "~> 0.1.1"
-  spec.add_dependency "zaniah", "~> 0.9.0"
+  spec.add_dependency "zaniah", ">= 0.9", "< 0.12"
 end
