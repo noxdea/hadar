@@ -28,6 +28,7 @@ exclude:
   - spec
   - tmp
   - tools
+  - vendor
 guide:
   - title: Getting started
     url: /docs/
